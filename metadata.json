@@ -1,0 +1,8 @@
+{
+  "name": "Remix Lentera: Portal Literasi \u0026 Numerasi Interaktif",
+  "description": "Platform pembelajaran literasi membaca dan numerasi interaktif dengan simulasi AKM, manipulatif matematika digital, dan lembar kerja cetak untuk siswa dan guru.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

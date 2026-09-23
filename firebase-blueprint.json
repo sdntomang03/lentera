@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "entities": {
+    "passages": {
+      "title": "Literasi Passages",
+      "description": "Koleksi teks bacaan literasi fiksi dan informasi beserta butir asesmen AKM",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "level": { "type": "string", "enum": ["sd-awal", "sd-tinggi", "smp"] },
+        "levelLabel": { "type": "string" },
+        "genre": { "type": "string", "enum": ["fiksi", "informasi"] },
+        "genreLabel": { "type": "string" },
+        "theme": { "type": "string" },
+        "wordCount": { "type": "number" },
+        "readingTimeMinutes": { "type": "number" },
+        "content": { "type": "string" },
+        "summary": { "type": "string" },
+        "vocabulary": { "type": "array" },
+        "questions": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "level", "genre", "content", "questions"]
+    },
+    "questions": {
+      "title": "Numerasi Questions",
+      "description": "Koleksi soal asesmen numerasi kontekstual AKM berbasis stimulus",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "level": { "type": "string", "enum": ["sd-awal", "sd-tinggi", "smp"] },
+        "levelLabel": { "type": "string" },
+        "domain": { "type": "string", "enum": ["bilangan", "geometri", "aljabar", "data"] },
+        "domainLabel": { "type": "string" },
+        "context": { "type": "string", "enum": ["personal", "sosial-budaya", "saintifik"] },
+        "contextLabel": { "type": "string" },
+        "stimulus": { "type": "object" },
+        "question": { "type": "string" },
+        "type": { "type": "string", "enum": ["single-choice", "multiple-choice", "numeric"] },
+        "options": { "type": "array" },
+        "correctAnswer": {},
+        "explanation": { "type": "string" },
+        "hint": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "level", "domain", "context", "question", "type", "correctAnswer"]
+    },
+    "admin_settings": {
+      "title": "Admin Settings",
+      "description": "Pengaturan portal dan PIN keamanan guru",
+      "type": "object",
+      "properties": {
+        "adminPin": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "teacherName": { "type": "string" }
+      }
+    },
+    "users": {
+      "title": "User Profiles & Student Learning Progress",
+      "description": "Data akun profil siswa, skor poin, riwayat kuis, modul terselesaikan, dan lencana prestasi",
+      "type": "object",
+      "properties": {
+        "studentName": { "type": "string" },
+        "school": { "type": "string" },
+        "gradeLevel": { "type": "string" },
+        "totalPoints": { "type": "number" },
+        "streakCount": { "type": "number" },
+        "completedPassages": { "type": "array" },
+        "completedNumeracy": { "type": "array" },
+        "quizScores": { "type": "object" },
+        "earnedBadges": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["studentName", "totalPoints"]
+    }
+  }
+}

@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Siswa dan guru dapat membaca materi literasi & numerasi
+    match /passages/{passageId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /questions/{questionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /admin_settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // Koleksi data progres & profil siswa/pengguna
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+  }
+}
