@@ -331,7 +331,7 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
               {/* 1st Place (Gold Champion) */}
               <div className="order-1 md:order-2 bg-gradient-to-b from-amber-50/80 via-white to-amber-50/30 rounded-2xl border-2 border-amber-400 p-6 flex flex-col items-center text-center relative shadow-md scale-102 hover:border-amber-500 transition-all">
                 <div className="absolute -top-3.5 px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-full text-xs font-black shadow-xs flex items-center gap-1">
-                  <span>👑</span> JUARA 1 NASIONAL
+                  <span>👑</span> JUARA 1
                 </div>
                 <div className="w-20 h-20 rounded-2xl bg-amber-100 border-3 border-amber-400 text-4xl flex items-center justify-center mb-3 mt-2 shadow-inner">
                   {topThree[0].avatar}

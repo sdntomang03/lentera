@@ -94,7 +94,7 @@ export async function fetchGlobalLeaderboard(
   const userEntry: LeaderboardEntry = {
     id: currentUserId,
     name: `${currentUser.studentName} (Kamu)`,
-    school: 'SDN Nusantara Cerdas',
+    school: 'SD NEGERI 007 NUNUKAN',
     city: 'Pusat Belajar',
     level: 'fase-c',
     levelLabel: 'Fase C (Kls 5-6)',
