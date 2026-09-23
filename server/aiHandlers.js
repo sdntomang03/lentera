@@ -32,7 +32,7 @@ export async function generateDailyTip(category = 'all') {
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
     });
 
-    const prompt = `Kamu adalah guru pendamping belajar anak sekolah (SD & SMP) di Indonesia pada kurikulum Merdeka.
+    const prompt = `Kamu adalah guru pendamping belajar anak SD di Indonesia pada kurikulum Merdeka.
 Buatlah 1 kutipan motivasi belajar singkat ATAU 1 tips cepat belajar (kategori: ${category}).
 Syarat:
 - Bahasa Indonesia yang ramah, hangat, edukatif, dan mudah dipahami siswa.

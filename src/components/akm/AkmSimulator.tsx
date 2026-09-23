@@ -84,21 +84,6 @@ export const AkmSimulator: React.FC<AkmSimulatorProps> = ({ onAkmCompleted, onBa
       explanation: 'Keliling persegi panjang = 2 x (panjang + lebar) = 2 x (12 + 8) = 2 x 20 = 40 meter.'
     },
     {
-      id: 'akm-5',
-      type: 'literasi',
-      title: 'Literasi - PLTS Terapung Cirata',
-      stimulus: 'Panel fotovoltaik yang dipasang mengapung di atas air Waduk Cirata memperoleh efek pendinginan alami (cooling effect), sehingga efisiensi energi listriknya meningkat hingga 10% dibanding panel di darat.',
-      question: 'Mengapa panel surya terapung lebih efisien dibanding di daratan?',
-      options: [
-        'Karena mendapat pendinginan alami dari air di bawahnya yang mencegah overheating',
-        'Karena disinari dua matahari sekaligus',
-        'Karena panel surya bisa berenang mengikuti arus',
-        'Karena air waduk menarik energi magnet bumi'
-      ],
-      correctAnswer: 'Karena mendapat pendinginan alami dari air di bawahnya yang mencegah overheating',
-      explanation: 'Air di bawah panel memberikan efek pendinginan yang menjaga suhu operasional panel tetap optimal.'
-    },
-    {
       id: 'akm-6',
       type: 'numerasi',
       title: 'Numerasi - Pola Manik Nusantara',

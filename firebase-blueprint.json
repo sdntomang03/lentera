@@ -7,7 +7,7 @@
       "type": "object",
       "properties": {
         "title": { "type": "string" },
-        "level": { "type": "string", "enum": ["sd-awal", "sd-tinggi", "smp"] },
+        "level": { "type": "string", "enum": ["sd-awal", "sd-tinggi"] },
         "levelLabel": { "type": "string" },
         "genre": { "type": "string", "enum": ["fiksi", "informasi"] },
         "genreLabel": { "type": "string" },
@@ -29,7 +29,7 @@
       "type": "object",
       "properties": {
         "title": { "type": "string" },
-        "level": { "type": "string", "enum": ["sd-awal", "sd-tinggi", "smp"] },
+        "level": { "type": "string", "enum": ["sd-awal", "sd-tinggi"] },
         "levelLabel": { "type": "string" },
         "domain": { "type": "string", "enum": ["bilangan", "geometri", "aljabar", "data"] },
         "domainLabel": { "type": "string" },
