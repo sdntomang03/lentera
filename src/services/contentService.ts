@@ -8,7 +8,13 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { LiteracyPassage, NumeracyQuestion, UserProgress } from '../types';
+import {
+  isSupportedEducationLevel,
+  isSupportedGradeLevel,
+  LiteracyPassage,
+  NumeracyQuestion,
+  UserProgress,
+} from '../types';
 import { LITERACY_PASSAGES } from '../data/literacyData';
 import { NUMERACY_QUESTIONS } from '../data/numeracyData';
 
@@ -105,7 +111,7 @@ export async function fetchPassagesFromFirestore(): Promise<LiteracyPassage[]> {
       items.push({ ...(docSnap.data() as LiteracyPassage), id: docSnap.id });
     });
 
-    return items;
+    return items.filter((item) => isSupportedEducationLevel(item.level));
   } catch (error) {
     console.warn('Firestore fetchPassages error, fallback to local data:', error);
     return LITERACY_PASSAGES;
@@ -148,7 +154,7 @@ export async function fetchNumeracyFromFirestore(): Promise<NumeracyQuestion[]> 
       items.push({ ...(docSnap.data() as NumeracyQuestion), id: docSnap.id });
     });
 
-    return items;
+    return items.filter((item) => isSupportedEducationLevel(item.level));
   } catch (error) {
     console.warn('Firestore fetchNumeracy error, fallback to local data:', error);
     return NUMERACY_QUESTIONS;
@@ -276,7 +282,7 @@ export async function fetchAllUsersFromFirestore(): Promise<UserProgress[]> {
       items.push({ ...(docSnap.data() as UserProgress), id: docSnap.id });
     });
 
-    return items;
+    return items.filter((item) => isSupportedGradeLevel(item.gradeLevel));
   } catch (error) {
     console.warn('Firestore fetchAllUsers error, fallback to demo data:', error);
     return INITIAL_DEMO_STUDENTS;
@@ -340,4 +346,3 @@ export async function seedDemoStudentsToFirestore(): Promise<void> {
     console.warn('Failed to seed demo students to Firestore:', err);
   }
 }
-

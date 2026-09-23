@@ -1,5 +1,26 @@
 export type EducationLevel = 'fase-a' | 'fase-b' | 'fase-c';
 
+export const SUPPORTED_GRADE_LEVEL_OPTIONS = [
+  'Fase A (Kelas 1-2 SD)',
+  'Fase B (Kelas 3-4 SD)',
+  'Fase C (Kelas 5-6 SD)',
+] as const;
+
+export const isSupportedEducationLevel = (level: unknown): level is EducationLevel =>
+  level === 'fase-a' || level === 'fase-b' || level === 'fase-c';
+
+export const isSupportedGradeLevel = (gradeLevel: string | undefined): boolean => {
+  if (!gradeLevel) return true;
+
+  const normalized = gradeLevel.toLowerCase();
+  return (
+    normalized.includes('fase a') ||
+    normalized.includes('fase b') ||
+    normalized.includes('fase c') ||
+    /kelas\s*[1-6]\b/.test(normalized)
+  );
+};
+
 export type LiteracyGenre = 'fabel' | 'informasi' | 'budaya' | 'sains' | 'puisi';
 
 export interface VocabItem {

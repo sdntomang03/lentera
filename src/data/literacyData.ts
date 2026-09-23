@@ -419,5 +419,235 @@ export const LITERACY_PASSAGES: LiteracyPassage[] = [
         cognitiveLevel: 'Mengevaluasi & Merefleksi (L3)'
       }
     ]
+  },
+  {
+    id: 'lit-5',
+    title: 'Lani Menanam Biji Kacang',
+    level: 'fase-a',
+    levelLabel: 'Fase A (Kelas 1 - 2)',
+    genre: 'sains',
+    genreLabel: 'Sains Anak',
+    estimatedReadTimeMinutes: 2,
+    wordCount: 105,
+    summary: 'Lani belajar merawat biji kacang hingga tumbuh menjadi tanaman kecil.',
+    paragraphs: [
+      'Lani menanam tiga biji kacang hijau di dalam pot kecil. Ia memasukkan tanah, membuat lubang, lalu menutup biji dengan tanah.',
+      'Setiap pagi, Lani menyiram pot dengan sedikit air. Ia meletakkan pot di dekat jendela agar terkena sinar matahari.',
+      'Beberapa hari kemudian, tunas hijau muncul. Lani merasa senang dan terus merawat tanamannya.'
+    ],
+    vocabulary: [{ word: 'Tunas', meaning: 'Bagian tumbuhan muda yang baru tumbuh.', example: 'Tunas hijau muncul dari tanah.' }],
+    moralOrTakeaway: 'Merawat makhluk hidup membutuhkan kesabaran dan tanggung jawab.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase A',
+    questions: [
+      { id: 'q5-1', type: 'single-choice', question: 'Apa yang ditanam Lani?', options: ['Biji kacang hijau', 'Biji jagung', 'Bunga mawar'], correctAnswers: 'Biji kacang hijau', explanation: 'Lani menanam tiga biji kacang hijau.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q5-2', type: 'sequencing', question: 'Urutkan kegiatan Lani!', sequenceItems: ['Memasukkan tanah ke pot', 'Menanam biji', 'Menyiram pot', 'Melihat tunas tumbuh'], correctAnswers: [0, 1, 2, 3], explanation: 'Itulah urutan kegiatan Lani dalam merawat tanaman.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
+  },
+  {
+    id: 'lit-6',
+    title: 'Payung Kuning Mila',
+    level: 'fase-a',
+    levelLabel: 'Fase A (Kelas 1 - 2)',
+    genre: 'fabel',
+    genreLabel: 'Cerita Fabel',
+    estimatedReadTimeMinutes: 2,
+    wordCount: 110,
+    summary: 'Mila meminjamkan payungnya kepada teman yang kehujanan.',
+    paragraphs: [
+      'Sepulang sekolah, awan menjadi gelap. Mila membawa payung kuning, sedangkan Sita tidak membawa payung.',
+      'Hujan turun dengan deras. Mila mengajak Sita berjalan bersama di bawah payungnya.',
+      'Mereka tiba di rumah Sita tanpa basah kuyup. Sita berterima kasih kepada Mila.'
+    ],
+    vocabulary: [{ word: 'Deras', meaning: 'Turun atau mengalir dengan banyak dan cepat.', example: 'Hujan turun deras sejak siang.' }],
+    moralOrTakeaway: 'Berbagi pertolongan membuat teman merasa aman dan bahagia.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase A',
+    questions: [
+      { id: 'q6-1', type: 'single-choice', question: 'Apa warna payung Mila?', options: ['Merah', 'Kuning', 'Biru'], correctAnswers: 'Kuning', explanation: 'Teks menyebutkan Mila membawa payung kuning.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q6-2', type: 'true-false', question: 'Mila membiarkan Sita berjalan sendirian saat hujan.', correctAnswers: false, explanation: 'Salah. Mila mengajak Sita berjalan bersama di bawah payung.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
+  },
+  {
+    id: 'lit-7',
+    title: 'Pasar Pagi di Desa',
+    level: 'fase-a',
+    levelLabel: 'Fase A (Kelas 1 - 2)',
+    genre: 'budaya',
+    genreLabel: 'Cerita Kehidupan Sehari-hari',
+    estimatedReadTimeMinutes: 2,
+    wordCount: 115,
+    summary: 'Dito mengenal berbagai kegiatan dan sikap baik saat menemani ibu ke pasar.',
+    paragraphs: [
+      'Pada Minggu pagi, Dito menemani Ibu ke pasar desa. Pasar ramai oleh penjual sayur, buah, ikan, dan kue tradisional.',
+      'Dito membantu membawa keranjang kecil. Ia menyapa penjual dengan sopan dan berdiri tertib saat Ibu membayar.',
+      'Sebelum pulang, Dito melihat seorang nenek menjatuhkan jeruk. Dito membantu memungutnya.'
+    ],
+    vocabulary: [{ word: 'Tertib', meaning: 'Teratur dan patuh pada aturan.', example: 'Dito berdiri tertib saat menunggu.' }],
+    moralOrTakeaway: 'Sopan, tertib, dan suka menolong adalah sikap terpuji.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase A',
+    questions: [
+      { id: 'q7-1', type: 'multiple-choice', question: 'Apa saja yang dijual di pasar?', options: ['Sayur', 'Buah', 'Ikan', 'Buku pelajaran'], correctAnswers: ['Sayur', 'Buah', 'Ikan'], explanation: 'Pasar menjual sayur, buah, ikan, dan kue tradisional.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q7-2', type: 'short-answer', question: 'Apa yang dilakukan Dito ketika nenek menjatuhkan jeruk?', correctAnswers: 'membantu memungut jeruk', explanation: 'Dito membantu memungut jeruk yang jatuh.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
+  },
+  {
+    id: 'lit-8',
+    title: 'Perpustakaan Kelas Empat',
+    level: 'fase-b',
+    levelLabel: 'Fase B (Kelas 3 - 4)',
+    genre: 'informasi',
+    genreLabel: 'Teks Informasi',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 145,
+    summary: 'Siswa kelas empat membuat perpustakaan kecil yang rapi dan menyenangkan.',
+    paragraphs: [
+      'Kelas empat memiliki rak buku di sudut ruangan. Setiap Jumat, siswa bergiliran merapikan buku dan mencatat buku yang dipinjam.',
+      'Buku cerita diletakkan di rak biru, sedangkan buku pengetahuan diletakkan di rak hijau. Setiap siswa boleh membaca saat waktu luang.',
+      'Guru mengingatkan agar buku dikembalikan tepat waktu dan tidak dilipat. Dengan begitu, semua siswa dapat menggunakan buku dengan nyaman.'
+    ],
+    vocabulary: [{ word: 'Bergiliran', meaning: 'Melakukan sesuatu secara bergantian.', example: 'Siswa bergiliran merapikan rak.' }],
+    moralOrTakeaway: 'Menjaga fasilitas bersama merupakan tanggung jawab semua anggota kelas.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase B',
+    questions: [
+      { id: 'q8-1', type: 'single-choice', question: 'Di mana buku cerita diletakkan?', options: ['Rak merah', 'Rak biru', 'Rak hijau'], correctAnswers: 'Rak biru', explanation: 'Buku cerita diletakkan di rak biru.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q8-2', type: 'multiple-choice', question: 'Pilih dua aturan menggunakan buku!', options: ['Mengembalikan tepat waktu', 'Melipat halaman', 'Tidak melipat buku', 'Menyembunyikan buku'], correctAnswers: ['Mengembalikan tepat waktu', 'Tidak melipat buku'], explanation: 'Buku harus dikembalikan tepat waktu dan tidak dilipat.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
+  },
+  {
+    id: 'lit-9',
+    title: 'Air untuk Kebun Sekolah',
+    level: 'fase-b',
+    levelLabel: 'Fase B (Kelas 3 - 4)',
+    genre: 'sains',
+    genreLabel: 'Teks Informasi & Sains',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 150,
+    summary: 'Siswa memanfaatkan air hujan untuk menyiram kebun sekolah.',
+    paragraphs: [
+      'Sekolah Bima memiliki kebun sayur. Saat musim hujan, guru memasang dua tong untuk menampung air dari talang atap.',
+      'Air hujan digunakan untuk menyiram tanaman pada pagi hari. Cara ini menghemat air bersih dan membuat kebun tetap subur.',
+      'Siswa menutup tong setelah digunakan agar tidak menjadi tempat nyamuk berkembang biak. Mereka juga membersihkan daun yang masuk ke dalam tong.'
+    ],
+    vocabulary: [{ word: 'Menampung', meaning: 'Mengumpulkan dan menyimpan sesuatu.', example: 'Tong digunakan untuk menampung air hujan.' }],
+    moralOrTakeaway: 'Menghemat air dan menjaga kebersihan dapat dilakukan melalui kebiasaan sederhana.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase B',
+    questions: [
+      { id: 'q9-1', type: 'single-choice', question: 'Untuk apa air hujan digunakan?', options: ['Menyiram tanaman', 'Mencuci sepeda', 'Mengisi kolam ikan'], correctAnswers: 'Menyiram tanaman', explanation: 'Air hujan digunakan untuk menyiram tanaman pada pagi hari.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q9-2', type: 'short-answer', question: 'Mengapa tong air harus ditutup?', correctAnswers: 'agar tidak menjadi tempat nyamuk berkembang biak', explanation: 'Tong ditutup untuk mencegah nyamuk berkembang biak.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
+  },
+  {
+    id: 'lit-10',
+    title: 'Jejak Batik di Rumah Nenek',
+    level: 'fase-b',
+    levelLabel: 'Fase B (Kelas 3 - 4)',
+    genre: 'budaya',
+    genreLabel: 'Budaya Nusantara',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 155,
+    summary: 'Rara mengetahui proses sederhana pembuatan batik dan pentingnya melestarikan budaya.',
+    paragraphs: [
+      'Rara mengunjungi rumah Nenek di Yogyakarta. Nenek menunjukkan kain batik bermotif bunga dan burung.',
+      'Nenek menjelaskan bahwa pembatik menggambar pola, menutup bagian tertentu dengan malam, lalu mewarnai kain. Setelah itu, malam dilepaskan dengan air panas.',
+      'Rara kagum melihat ketelitian pembatik. Ia berjanji memakai dan mengenalkan batik dengan bangga.'
+    ],
+    vocabulary: [{ word: 'Motif', meaning: 'Pola atau corak yang menghiasi benda.', example: 'Kain itu memiliki motif bunga.' }],
+    moralOrTakeaway: 'Mengenal dan menggunakan karya budaya membantu melestarikannya.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase B',
+    questions: [
+      { id: 'q10-1', type: 'sequencing', question: 'Urutkan proses pembuatan batik sesuai bacaan!', sequenceItems: ['Menggambar pola', 'Menutup bagian dengan malam', 'Mewarnai kain', 'Melepaskan malam'], correctAnswers: [0, 1, 2, 3], explanation: 'Proses dimulai dari menggambar pola hingga melepaskan malam.', cognitiveLevel: 'Memahami & Interpretasi (L2)' },
+      { id: 'q10-2', type: 'short-answer', question: 'Apa janji Rara setelah melihat proses membatik?', correctAnswers: 'memakai dan mengenalkan batik dengan bangga', explanation: 'Rara berjanji memakai dan mengenalkan batik dengan bangga.', cognitiveLevel: 'Mengevaluasi & Merefleksi (L3)' }
+    ]
+  },
+  {
+    id: 'lit-11',
+    title: 'Burung-Burung di Taman Kota',
+    level: 'fase-c',
+    levelLabel: 'Fase C (Kelas 5 - 6)',
+    genre: 'sains',
+    genreLabel: 'Teks Informasi & Sains',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 175,
+    summary: 'Pengamatan sederhana membantu siswa memahami manfaat taman kota bagi burung dan manusia.',
+    paragraphs: [
+      'Kelompok Saka mengamati taman kota selama tiga pagi. Mereka menemukan burung gereja, kutilang, dan prenjak di antara pepohonan.',
+      'Burung memakan biji dan serangga kecil. Pepohonan menyediakan makanan, tempat berteduh, serta lokasi untuk membuat sarang.',
+      'Kelompok itu mencatat hasil pengamatan tanpa mengganggu burung. Mereka menyimpulkan bahwa taman yang terawat penting bagi keanekaragaman hayati kota.'
+    ],
+    vocabulary: [{ word: 'Keanekaragaman hayati', meaning: 'Beragamnya makhluk hidup dalam suatu lingkungan.', example: 'Taman membantu menjaga keanekaragaman hayati.' }],
+    moralOrTakeaway: 'Pengamatan yang teliti dan tidak mengganggu dapat membantu memahami alam.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase C',
+    questions: [
+      { id: 'q11-1', type: 'multiple-choice', question: 'Apa manfaat pepohonan bagi burung?', options: ['Menyediakan makanan', 'Tempat berteduh', 'Tempat membuat sarang', 'Tempat menjual makanan'], correctAnswers: ['Menyediakan makanan', 'Tempat berteduh', 'Tempat membuat sarang'], explanation: 'Pepohonan menyediakan makanan, tempat berteduh, dan lokasi bersarang.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q11-2', type: 'short-answer', question: 'Mengapa kelompok Saka tidak menangkap burung saat mengamati?', correctAnswers: 'agar tidak mengganggu burung', explanation: 'Mereka mencatat pengamatan tanpa mengganggu burung.', cognitiveLevel: 'Mengevaluasi & Merefleksi (L3)' }
+    ]
+  },
+  {
+    id: 'lit-12',
+    title: 'Kisah Sungai yang Kembali Jernih',
+    level: 'fase-c',
+    levelLabel: 'Fase C (Kelas 5 - 6)',
+    genre: 'informasi',
+    genreLabel: 'Teks Informasi Lingkungan',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 180,
+    summary: 'Warga bekerja sama mengurangi sampah agar sungai di desanya kembali sehat.',
+    paragraphs: [
+      'Dahulu, Sungai Sari dipenuhi sampah rumah tangga. Airnya keruh dan berbau sehingga warga jarang mendekati sungai.',
+      'Ketua RT mengajak warga memilah sampah, menyediakan tempat sampah, dan melakukan kerja bakti setiap dua minggu. Anak-anak membuat poster agar warga tidak membuang sampah ke sungai.',
+      'Enam bulan kemudian, jumlah sampah berkurang. Air sungai lebih jernih dan beberapa ikan kembali terlihat. Warga menyadari bahwa perubahan terjadi karena kebiasaan dilakukan bersama-sama.'
+    ],
+    vocabulary: [{ word: 'Memilah', meaning: 'Memisahkan sesuatu berdasarkan jenisnya.', example: 'Warga memilah sampah organik dan anorganik.' }],
+    moralOrTakeaway: 'Perubahan lingkungan membutuhkan kerja sama dan kebiasaan yang konsisten.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase C',
+    questions: [
+      { id: 'q12-1', type: 'single-choice', question: 'Apa penyebab Sungai Sari dahulu keruh dan berbau?', options: ['Banyak sampah rumah tangga', 'Terlalu banyak ikan', 'Tidak ada pepohonan'], correctAnswers: 'Banyak sampah rumah tangga', explanation: 'Sungai dipenuhi sampah rumah tangga.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q12-2', type: 'short-answer', question: 'Mengapa kondisi sungai membaik?', correctAnswers: 'karena warga bekerja sama mengurangi sampah', explanation: 'Warga memilah sampah, kerja bakti, dan mengedukasi masyarakat.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
+  },
+  {
+    id: 'lit-13',
+    title: 'Membaca Peta Jalur Evakuasi',
+    level: 'fase-c',
+    levelLabel: 'Fase C (Kelas 5 - 6)',
+    genre: 'informasi',
+    genreLabel: 'Keselamatan',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 170,
+    summary: 'Siswa belajar membaca tanda pada peta jalur evakuasi untuk bersiap menghadapi bencana.',
+    paragraphs: [
+      'Sekolah mengadakan latihan evakuasi gempa. Sebelum latihan dimulai, Bu Rini menjelaskan peta jalur evakuasi yang dipasang di setiap kelas.',
+      'Panah hijau menunjukkan arah menuju lapangan. Tanda tangga menunjukkan jalur keluar dari lantai dua, sedangkan tanda titik kumpul menunjukkan tempat semua siswa berkumpul.',
+      'Saat alarm berbunyi, siswa berjalan tenang mengikuti panah. Mereka tidak berlari, tidak kembali mengambil barang, dan mendengarkan arahan guru.'
+    ],
+    vocabulary: [{ word: 'Evakuasi', meaning: 'Pemindahan orang dari tempat berbahaya ke tempat aman.', example: 'Siswa mengikuti latihan evakuasi.' }],
+    moralOrTakeaway: 'Memahami petunjuk dan tetap tenang membantu menjaga keselamatan bersama.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase C',
+    questions: [
+      { id: 'q13-1', type: 'single-choice', question: 'Apa arti panah hijau pada peta?', options: ['Arah menuju lapangan', 'Tempat menyimpan tas', 'Arah menuju kantin'], correctAnswers: 'Arah menuju lapangan', explanation: 'Panah hijau menunjukkan arah menuju lapangan.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q13-2', type: 'multiple-choice', question: 'Sikap apa yang benar saat evakuasi?', options: ['Berjalan tenang', 'Mengikuti arahan guru', 'Berbalik mengambil barang', 'Berlari saling mendahului'], correctAnswers: ['Berjalan tenang', 'Mengikuti arahan guru'], explanation: 'Siswa harus tenang dan mengikuti arahan, bukan berlari atau mengambil barang.', cognitiveLevel: 'Mengevaluasi & Merefleksi (L3)' }
+    ]
+  },
+  {
+    id: 'lit-14',
+    title: 'Energi Matahari di Atap Sekolah',
+    level: 'fase-c',
+    levelLabel: 'Fase C (Kelas 5 - 6)',
+    genre: 'sains',
+    genreLabel: 'Teks Sains',
+    estimatedReadTimeMinutes: 3,
+    wordCount: 180,
+    summary: 'Panel surya membantu sekolah menghasilkan listrik dari cahaya matahari.',
+    paragraphs: [
+      'Sekolah Tunas Bangsa memasang panel surya di atap aula. Panel tersebut menangkap cahaya matahari dan mengubahnya menjadi energi listrik.',
+      'Listrik digunakan untuk menyalakan lampu perpustakaan dan mengisi baterai komputer. Pada siang hari yang cerah, panel menghasilkan lebih banyak listrik daripada saat mendung.',
+      'Guru menjelaskan bahwa energi matahari termasuk energi terbarukan karena sumbernya tersedia kembali secara alami. Siswa tetap diajak mematikan lampu yang tidak digunakan agar energi tidak boros.'
+    ],
+    vocabulary: [{ word: 'Terbarukan', meaning: 'Dapat tersedia kembali melalui proses alami.', example: 'Matahari merupakan sumber energi terbarukan.' }],
+    moralOrTakeaway: 'Menggunakan energi terbarukan perlu disertai kebiasaan hemat energi.',
+    authorOrSource: 'Bacaan Literasi Kontekstual Fase C',
+    questions: [
+      { id: 'q14-1', type: 'single-choice', question: 'Apa fungsi panel surya di sekolah?', options: ['Mengubah cahaya matahari menjadi listrik', 'Mengubah air menjadi bensin', 'Menyimpan air hujan'], correctAnswers: 'Mengubah cahaya matahari menjadi listrik', explanation: 'Panel surya menangkap cahaya dan mengubahnya menjadi listrik.', cognitiveLevel: 'Menemukan Informasi (L1)' },
+      { id: 'q14-2', type: 'short-answer', question: 'Mengapa panel menghasilkan lebih banyak listrik pada siang yang cerah?', correctAnswers: 'karena menerima lebih banyak cahaya matahari', explanation: 'Cahaya matahari yang lebih banyak membuat panel menghasilkan lebih banyak listrik.', cognitiveLevel: 'Memahami & Interpretasi (L2)' }
+    ]
   }
 ];

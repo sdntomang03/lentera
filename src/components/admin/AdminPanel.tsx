@@ -8,6 +8,7 @@ import {
   NumeracyDomain,
   NumeracyContext,
   UserProgress,
+  SUPPORTED_GRADE_LEVEL_OPTIONS,
 } from '../../types';
 import { BADGES_DATA } from '../../data/badgesData';
 import {
@@ -2574,12 +2575,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Kelas / Fase:</label>
-                  <input
-                    type="text"
+                  <select
                     value={editingUser.gradeLevel || ''}
                     onChange={(e) => setEditingUser({ ...editingUser, gradeLevel: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                  />
+                  >
+                    {SUPPORTED_GRADE_LEVEL_OPTIONS.map((gradeLevel) => (
+                      <option key={gradeLevel} value={gradeLevel}>
+                        {gradeLevel}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

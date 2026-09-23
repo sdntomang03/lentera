@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { UserProgress, AuthSession } from '../../types';
+import { UserProgress, AuthSession, SUPPORTED_GRADE_LEVEL_OPTIONS } from '../../types';
 import {
   fetchAllUsersFromFirestore,
   saveUserToFirestore,
@@ -17,12 +17,6 @@ interface LoginViewProps {
 }
 
 const AVATAR_LIST = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '⭐', '📚', '🎨', '🌟', '🦁'];
-
-const GRADE_OPTIONS = [
-  'Fase A (Kelas 1-2 SD)',
-  'Fase B (Kelas 3-4 SD)',
-  'Fase C (Kelas 5-6 SD)',
-];
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
@@ -453,7 +447,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         onChange={(e) => setNewGradeLevel(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-700 cursor-pointer"
                       >
-                        {GRADE_OPTIONS.map((g) => (
+                        {SUPPORTED_GRADE_LEVEL_OPTIONS.map((g) => (
                           <option key={g} value={g}>
                             {g}
                           </option>
