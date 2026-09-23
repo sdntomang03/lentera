@@ -8,6 +8,7 @@ import { ReadingPracticeFaseA } from './ReadingPracticeFaseA';
 import { WordScrambleGame } from './WordScrambleGame';
 import { CodingAdventureGame } from './CodingAdventureGame';
 import { MathDuelGame } from './MathDuelGame';
+import { TangramDuelGame } from './TangramDuelGame';
 import { soundFx } from '../../utils/audio';
 
 interface ManipulativesHubProps {
@@ -16,7 +17,7 @@ interface ManipulativesHubProps {
 
 export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<
-    'fraction' | 'numberline' | 'balance' | 'clock' | 'baseten' | 'reading' | 'wordgame' | 'coding' | 'duel'
+    'fraction' | 'numberline' | 'balance' | 'clock' | 'baseten' | 'reading' | 'wordgame' | 'coding' | 'duel' | 'tangram'
   >('fraction');
 
   const tools = [
@@ -29,6 +30,7 @@ export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack }) =>
     { id: 'wordgame', name: 'Game Susun Kata', icon: '🧩', desc: 'Susun huruf acak jadi kata sambil bermain' },
     { id: 'coding', name: 'Petualangan Koding', icon: '🧑‍💻', desc: 'Susun langkah Maju/Kanan/Kiri menuju sekolah' },
     { id: 'duel', name: 'Duel Berhitung Cepat', icon: '⚡', desc: 'Game 2 pemain, adu cepat jawab hitungan' },
+    { id: 'tangram', name: 'Duel Tangram', icon: '🔺', desc: 'Game 2 tim, susun keping tangram tercepat' },
   ] as const;
 
   return (
@@ -49,7 +51,7 @@ export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack }) =>
               <span className="text-teal-700 font-extrabold text-base group-hover:-translate-x-0.5 transition-transform">←</span>
               <span>Kembali</span>
             </button>
-            <span className="text-xs text-slate-400 font-medium hidden sm:inline">9 Alat Visual Interaktif</span>
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">10 Alat Visual Interaktif</span>
           </div>
         )}
 
@@ -103,6 +105,7 @@ export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack }) =>
         {activeTab === 'wordgame' && <WordScrambleGame />}
         {activeTab === 'coding' && <CodingAdventureGame />}
         {activeTab === 'duel' && <MathDuelGame />}
+        {activeTab === 'tangram' && <TangramDuelGame />}
       </div>
     </div>
   );
