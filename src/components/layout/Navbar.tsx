@@ -299,53 +299,25 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </button>
 
-            {/* Endzi Mascot Chat Button */}
-            {onToggleChat && (
-              <button
-                onClick={() => {
-                  soundFx.playClick();
-                  onToggleChat();
-                }}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold transition-all shadow-xs cursor-pointer border border-amber-300/80 active:scale-95 shrink-0"
-                title="Tanya Endzi si Burung Enggang (Maskot AI)"
-              >
-                <div className="w-5 h-5 rounded-full overflow-hidden border border-white shrink-0 bg-teal-900 shadow-2xs">
-                  <img src={ENDZI_MASCOT_IMAGE} alt="Endzi" className="w-full h-full object-cover" />
-                </div>
-                <span className="hidden sm:inline">Tanya Endzi</span>
-                <span className="hidden sm:inline text-[10px] bg-amber-800/60 px-1 py-0.2 rounded font-black">🪶 AI</span>
-              </button>
-            )}
-
-            {/* Admin Guru / Teacher Portal Button (moved to mobile menu below md to avoid crowding) */}
-            {onOpenAdmin && (
-              <button
-                onClick={() => {
-                  soundFx.playClick();
-                  onOpenAdmin();
-                }}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                title="Buka Panel Admin Guru (Kelola Konten Firebase)"
-              >
-                <span>⚙️</span>
-                <span className="hidden lg:inline">Kelola Konten</span>
-              </button>
-            )}
-
-            {/* Logout / Switch Account Button (moved to mobile menu below md to avoid crowding) */}
+            {/* Logout / Switch Account Button */}
             {onLogout && (
               <button
                 onClick={() => {
                   soundFx.playClick();
                   setIsLogoutConfirmOpen(true);
                 }}
-                className="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-2xl border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-600 hover:text-red-700 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-2xl border border-red-200 bg-red-50 hover:border-red-300 hover:bg-red-100 text-red-700 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0"
                 title="Keluar / Beralih Akun Pengguna"
               >
                 <span>🚪</span>
-                <span className="hidden xl:inline">Keluar</span>
+                <span className="hidden sm:inline">Keluar</span>
               </button>
             )}
+
+            {/* Endzi Mascot Chat Button */}
+          
+
+            {/* Admin Guru / Teacher Portal Button (moved to mobile menu below md to avoid crowding) */}
 
             {/* Mobile Hamburger Button (Only on mobile < md) */}
             <button
@@ -420,35 +392,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </button>
 
-            {onToggleChat && (
-              <button
-                onClick={() => {
-                  soundFx.playClick();
-                  setMobileMenuOpen(false);
-                  onToggleChat();
-                }}
-                className="w-full p-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs"
-              >
-                <div className="w-5 h-5 rounded-full overflow-hidden border border-white shrink-0 bg-teal-900">
-                  <img src={ENDZI_MASCOT_IMAGE} alt="Endzi" className="w-full h-full object-cover" />
-                </div>
-                <span>Tanya Endzi (Maskot Burung Enggang AI) 🪶</span>
-              </button>
-            )}
-
-            {onOpenAdmin && (
-              <button
-                onClick={() => {
-                  soundFx.playClick();
-                  setMobileMenuOpen(false);
-                  onOpenAdmin();
-                }}
-                className="w-full p-2.5 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs"
-              >
-                <span>⚙️</span>
-                <span>Panel Kelola Konten Guru (Firebase)</span>
-              </button>
-            )}
 
             {onLogout && (
               <button
@@ -460,7 +403,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="w-full p-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
               >
                 <span>🚪</span>
-                <span>Keluar / Ganti Akun Pengguna</span>
+                <span>Keluar</span>
               </button>
             )}
           </div>

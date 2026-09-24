@@ -29,6 +29,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [students, setStudents] = useState<UserProgress[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(true);
   const [searchStudentQuery, setSearchStudentQuery] = useState<string>('');
+  const [studentUsername, setStudentUsername] = useState<string>('');
+  const [studentPassword, setStudentPassword] = useState<string>('');
+  const [studentLoginError, setStudentLoginError] = useState<string>('');
 
   // Admin / Teacher config & login
   const [adminConfig, setAdminConfig] = useState<AdminPortalConfig>({
@@ -37,6 +40,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     teacherName: 'Guru Penggerak',
   });
   const [teacherPinInput, setTeacherPinInput] = useState<string>('');
+  const [teacherUsername, setTeacherUsername] = useState<string>('');
   const [teacherNameInput, setTeacherNameInput] = useState<string>('');
   const [teacherPinError, setTeacherPinError] = useState<string>('');
 
@@ -60,15 +64,44 @@ export const LoginView: React.FC<LoginViewProps> = ({
         fetchAllUsersFromFirestore(),
         fetchAdminPortalConfig(),
       ]);
-      setStudents(uData || []);
+      setStudents(uData && uData.length > 0 ? uData : [createDemoStudent()]);
       setAdminConfig(cfg);
       setNewSchool(cfg.schoolName || 'SD Negeri Nusantara');
       setTeacherNameInput(cfg.teacherName || 'Bapak/Ibu Guru');
     } catch (err) {
       console.warn('Failed to load login initial data from Firestore:', err);
+      setStudents([createDemoStudent()]);
     } finally {
       setIsLoadingStudents(false);
     }
+  };
+
+  const createDemoStudent = (): UserProgress => {
+    const todayStr = getTodayDateString();
+    return {
+      id: 'demo-student',
+      studentName: 'Budi Pratama',
+      school: 'SD Negeri Nusantara',
+      gradeLevel: 'Fase B (Kelas 3-4 SD)',
+      avatar: '👦',
+      completedPassages: [],
+      completedNumeracy: [],
+      quizScores: {},
+      earnedBadges: ['badge-first-read'],
+      totalPoints: 120,
+      streakCount: 1,
+      longestStreak: 1,
+      streakBonusPointsEarned: 20,
+      activityHistoryDates: [todayStr],
+      lastActiveDate: todayStr,
+      dailyChallenge: {
+        date: todayStr,
+        literacyCompleted: false,
+        numeracyCompleted: false,
+        bonusPointsEarned: 0,
+        allCompleted: false,
+      },
+    };
   };
 
   // --- STUDENT: SELECT EXISTING ACCOUNT ---
@@ -87,6 +120,26 @@ export const LoginView: React.FC<LoginViewProps> = ({
     };
 
     onLoginSuccess(session, student);
+  };
+
+  const handleStudentLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = studentUsername.trim().toLowerCase();
+    const student = students.find(
+      (item) =>
+        item.id?.toLowerCase() === username ||
+        item.studentName.toLowerCase() === username
+    );
+    const isDemoAccount = username === 'budi' && studentPassword === '123456';
+
+    if (studentPassword !== '123456' || (!student && !isDemoAccount)) {
+      soundFx.playWrong();
+      setStudentLoginError('Username atau password salah.');
+      return;
+    }
+
+    setStudentLoginError('');
+    handleSelectStudent(student || createDemoStudent());
   };
 
   // --- STUDENT: REGISTER NEW ACCOUNT ---
@@ -159,7 +212,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
   // --- TEACHER: LOGIN VIA PIN ---
   const handleTeacherLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (teacherPinInput.trim() === adminConfig.adminPin.trim()) {
+    if (
+      teacherUsername.trim().toLowerCase() === 'guru' &&
+      teacherPinInput.trim() === adminConfig.adminPin.trim()
+    ) {
       soundFx.playFanfare();
       confetti({ particleCount: 60, spread: 70 });
 
@@ -175,7 +231,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       onLoginSuccess(session);
     } else {
       soundFx.playWrong();
-      setTeacherPinError('PIN salah! Silakan coba lagi (Default PIN: 123456).');
+      setTeacherPinError('Username atau password salah. Gunakan guru / 123456.');
     }
   };
 
@@ -325,92 +381,47 @@ export const LoginView: React.FC<LoginViewProps> = ({
               {/* MODE 1: SELECT EXISTING STUDENT */}
               {studentMode === 'select' && (
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="relative flex-1">
+                  <form onSubmit={handleStudentLogin} className="max-w-md mx-auto space-y-3">
+                    {studentLoginError && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
+                        ⚠️ {studentLoginError}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Username
+                      </label>
                       <input
                         type="text"
-                        placeholder="Cari nama Anda atau kelas..."
-                        value={searchStudentQuery}
-                        onChange={(e) => setSearchStudentQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                        value={studentUsername}
+                        onChange={(e) => setStudentUsername(e.target.value)}
+                        placeholder="Masukkan username"
+                        autoComplete="username"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
                       />
-                      <span className="absolute left-3 top-3 text-slate-400 text-xs">🔍</span>
                     </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        value={studentPassword}
+                        onChange={(e) => setStudentPassword(e.target.value)}
+                        placeholder="Masukkan password"
+                        autoComplete="current-password"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                      />
+                    </div>
+            
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 px-4 rounded-2xl bg-teal-800 hover:bg-teal-900 text-white font-bold text-sm transition-all shadow-md shadow-teal-900/20 cursor-pointer"
+                    >
+                      Masuk dan Mulai Belajar ➔
+                    </button>
+                  </form>
 
-                    <div className="text-xs text-slate-500 shrink-0 text-right">
-                      {filteredStudents.length} siswa ditemukan
-                    </div>
-                  </div>
-
-                  {isLoadingStudents ? (
-                    <div className="py-16 text-center text-slate-400 space-y-3">
-                      <div className="w-8 h-8 border-3 border-teal-700 border-t-transparent rounded-full animate-spin mx-auto" />
-                      <p className="text-xs">Memuat daftar siswa dari Firebase...</p>
-                    </div>
-                  ) : filteredStudents.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
-                      {filteredStudents.map((student) => (
-                        <button
-                          key={student.id || student.studentName}
-                          onClick={() => handleSelectStudent(student)}
-                          className="p-4 rounded-2xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/50 bg-white text-left flex items-center justify-between gap-3 transition-all hover:shadow-md cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-2xl shrink-0 group-hover:scale-105 transition-transform">
-                              {student.avatar || '👦'}
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-teal-900 truncate">
-                                {student.studentName}
-                              </h4>
-                              <p className="text-[11px] text-slate-500 truncate">
-                                {student.gradeLevel || 'Fase B'} · {student.school || adminConfig.schoolName}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1 font-mono text-[11px]">
-                                <span className="text-amber-600 font-bold">⭐ {student.totalPoints}</span>
-                                <span className="text-orange-600 font-bold">🔥 {student.streakCount || 1}h</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <span className="text-slate-300 group-hover:text-teal-600 text-lg font-bold shrink-0">
-                            ➔
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 space-y-3">
-                      <p className="text-xs text-slate-600">
-                        {searchStudentQuery
-                          ? 'Tidak ada siswa yang cocok dengan kata kunci pencarian.'
-                          : 'Belum ada daftar siswa di database.'}
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <button
-                          onClick={() => setStudentMode('register')}
-                          className="px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold cursor-pointer"
-                        >
-                          + Daftar Sebagai Siswa Baru
-                        </button>
-                        {students.length === 0 && (
-                          <button
-                            onClick={handleLoadSampleStudents}
-                            className="px-3.5 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
-                          >
-                            📥 Muat Siswa Contoh Kelas
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-3.5 bg-teal-50/80 rounded-2xl border border-teal-200/60 text-[11px] text-teal-950 flex items-start gap-2.5">
-                    <span className="text-base shrink-0">💡</span>
-                    <p className="leading-relaxed">
-                      Klik pada kartu nama Anda untuk masuk. Seluruh nilai kuis, poin bintang, dan rekor streak Anda tersimpan aman di cloud database Firebase!
-                    </p>
-                  </div>
                 </div>
               )}
 
@@ -539,27 +550,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Nama Guru Pengampu:
+                    Username:
                   </label>
                   <input
                     type="text"
-                    value={teacherNameInput}
-                    onChange={(e) => setTeacherNameInput(e.target.value)}
-                    placeholder="Nama Bapak/Ibu Guru"
+                    value={teacherUsername}
+                    onChange={(e) => setTeacherUsername(e.target.value)}
+                    placeholder="Masukkan username guru"
+                    autoComplete="username"
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-700"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Masukkan PIN Guru:
+                    Password:
                   </label>
                   <input
                     type="password"
                     maxLength={8}
                     value={teacherPinInput}
                     onChange={(e) => setTeacherPinInput(e.target.value)}
-                    placeholder="PIN 6 digit (Default: 123456)"
+                    placeholder="Masukkan password"
+                    autoComplete="current-password"
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xl font-mono tracking-widest font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-700"
                     autoFocus
                   />
@@ -570,7 +583,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     <span>🔐</span> Informasi Keamanan:
                   </div>
                   <p>
-                    PIN bawaan sistem adalah <strong className="font-mono bg-indigo-100 px-1 py-0.5 rounded">123456</strong>. Anda dapat mengubah PIN di menu Pengaturan setelah masuk.
+                    Akun demo guru adalah <strong className="font-mono bg-indigo-100 px-1 py-0.5 rounded">guru</strong> / <strong className="font-mono bg-indigo-100 px-1 py-0.5 rounded">123456</strong>.
                   </p>
                 </div>
 

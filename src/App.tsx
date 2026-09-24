@@ -183,6 +183,39 @@ export default function App() {
     loadFirestoreContent();
   }, []);
 
+  const handleLoginSuccess = (nextSession: AuthSession, progressData?: UserProgress) => {
+    setSession(nextSession);
+    if (progressData) {
+      setProgress({
+        ...defaultProgress,
+        ...progressData,
+        dailyChallenge: getCurrentDailyChallenge({
+          ...defaultProgress,
+          ...progressData,
+        }),
+      });
+    } else if (nextSession.role === 'teacher') {
+      setProgress((prev) => ({
+        ...prev,
+        studentName: nextSession.studentName,
+      }));
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(nextSession));
+    }
+  };
+
+  const handleLogout = () => {
+    setSession(null);
+    setActiveNav('literasi');
+    setNavHistory([]);
+    setIsChatOpen(false);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+    }
+  };
+
   const handleStartDailyChallenge = (type: 'literasi' | 'numerasi') => {
     soundFx.playClick();
     if (type === 'literasi') {
@@ -484,6 +517,25 @@ export default function App() {
     });
   };
 
+  if (!session) {
+    return (
+      <LoginView
+        onLoginSuccess={handleLoginSuccess}
+        onOpenAdminDirect={() => {
+          handleLoginSuccess({
+            role: 'teacher',
+            studentName: 'Guru Penggerak',
+            school: 'SD Negeri Nusantara',
+            gradeLevel: 'Pengampu / Guru',
+            avatar: '👨‍🏫',
+            loginTime: new Date().toISOString(),
+          });
+          setIsAdminOpen(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 flex flex-col">
       {/* Top Main Navigation (Hidden on Print) */}
@@ -492,6 +544,8 @@ export default function App() {
         onSelectNav={handleNavSelect}
         progress={progress}
         onOpenAdmin={() => setIsAdminOpen(true)}
+        onLogout={handleLogout}
+        session={session}
         onToggleChat={() => setIsChatOpen((prev) => !prev)}
       />
 
