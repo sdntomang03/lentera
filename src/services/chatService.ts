@@ -21,7 +21,7 @@ export async function sendMessageToEndzi(params: SendMessageParams): Promise<str
       text: msg.text,
     }));
 
-    const response = await fetch('/api/gemini/chat', {
+    const response = await fetch('/api/deepseek/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

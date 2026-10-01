@@ -1,5 +1,6 @@
 import { INITIAL_LEADERBOARD_DATA } from '../data/leaderboardData';
 import { EducationLevel, LeaderboardEntry, UserProgress } from '../types';
+import { apiRequest } from './apiClient';
 
 const LEADERBOARD_CACHE_KEY = 'lentera_global_leaderboard_v1';
 
@@ -51,7 +52,7 @@ function saveStoredLeaderboard(list: LeaderboardEntry[]): void {
 
 /**
  * Fetch top student points across the application.
- * Tries the real backend /api/leaderboard endpoint first; falls back to cached/local store.
+ * Tries the Laravel leaderboard endpoint first; falls back to cached/local store.
  */
 export async function fetchGlobalLeaderboard(
   currentUser: UserProgress,
@@ -59,23 +60,17 @@ export async function fetchGlobalLeaderboard(
 ): Promise<LeaderboardResponse> {
   let entries: LeaderboardEntry[] = [];
 
-  // Try fetching from /api/leaderboard
+  // Try fetching from the Database.
   try {
     const params = new URLSearchParams();
     if (filters.level !== 'all') params.append('level', filters.level);
     if (filters.timeframe) params.append('timeframe', filters.timeframe);
     if (filters.searchQuery) params.append('q', filters.searchQuery);
 
-    const res = await fetch(`/api/leaderboard?${params.toString()}`, {
-      headers: { 'Accept': 'application/json' },
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.entries)) {
-        entries = data.entries;
-      }
-    }
+    const data = await apiRequest<{ entries: LeaderboardEntry[] }>(
+      `/leaderboard?${params.toString()}`,
+    );
+    if (Array.isArray(data.entries)) entries = data.entries;
   } catch {
     // API endpoint unavailable or in standalone preview, use local database
   }
@@ -167,18 +162,8 @@ export async function fetchGlobalLeaderboard(
  * Add or sync student points to the leaderboard
  */
 export async function syncStudentScoreToLeaderboard(currentUser: UserProgress): Promise<void> {
-  try {
-    await fetch('/api/leaderboard/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: currentUser.studentName,
-        points: currentUser.totalPoints,
-        badges: currentUser.earnedBadges.length,
-        completedCount: currentUser.completedPassages.length + currentUser.completedNumeracy.length,
-      }),
-    });
-  } catch {
-    // silently failover to local storage
-  }
+  await apiRequest('/me/progress', {
+    method: 'PUT',
+    body: JSON.stringify({ progress: currentUser }),
+  });
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { UserProgress, AuthSession } from '../../types';
 import { soundFx } from '../../utils/audio';
 import { ENDZI_MASCOT_IMAGE } from '../../assets/mascot';
@@ -17,7 +18,6 @@ interface NavbarProps {
   activeNav: NavItemKey;
   onSelectNav: (nav: NavItemKey) => void;
   progress: UserProgress;
-  onOpenAdmin?: () => void;
   onLogout?: () => void;
   session?: AuthSession | null;
   onToggleChat?: () => void;
@@ -84,8 +84,8 @@ const NAV_ITEMS: NavItemConfig[] = [
   },
   {
     key: 'akm',
-    label: 'Simulasi ANBK',
-    shortLabel: 'ANBK',
+    label: 'Simulasi TKA',
+    shortLabel: 'TKA',
     icon: '🏆',
     tag: 'Ujian',
     colorClass: {
@@ -122,7 +122,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeNav,
   onSelectNav,
   progress,
-  onOpenAdmin,
   onLogout,
   session,
   onToggleChat,
@@ -136,16 +135,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     setMobileMenuOpen(false);
   };
 
-  const totalActivities =
-    progress.completedPassages.length + progress.completedNumeracy.length;
-
   return (
     <header className="no-print sticky top-0 z-50 w-full max-w-full overflow-x-hidden transition-all duration-200 backdrop-blur-md bg-white/95 border-b border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
       {/* Top micro-gradient indicator bar */}
       <div className="h-0.75 w-full bg-gradient-to-r from-teal-500 via-emerald-400 to-indigo-600" />
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-2 sm:gap-3">
+      <div className="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6">
+        <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo & Brand Identity */}
           <button
             onClick={() => handleNavClick('literasi')}
@@ -166,25 +162,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="font-brand text-lg sm:text-xl font-bold tracking-tight text-slate-900 group-hover:text-teal-700 transition-colors">
                   Lentera
                 </span>
-                <span className="hidden sm:inline text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 tracking-wider">
-                  Merdeka
-                </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
-                Portal Literasi & Numerasi Terpadu
-              </p>
             </div>
           </button>
 
           {/* Desktop Navigation (Single, Clean Menu for xl & desktop screens) */}
-          <nav className="hidden xl:flex items-center gap-1 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80">
+          <nav className="hidden xl:flex items-center gap-0.5 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80">
             {NAV_ITEMS.map((item) => {
               const isActive = activeNav === item.key;
               return (
                 <button
                   key={item.key}
                   onClick={() => handleNavClick(item.key)}
-                  className={`relative px-3 py-1.5 text-xs font-bold rounded-xl transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
+                  className={`relative px-2 py-1.5 text-[11px] font-bold rounded-xl transition-all duration-200 flex items-center gap-1 cursor-pointer select-none ${
                     isActive
                       ? item.colorClass.active
                       : `text-slate-600 ${item.colorClass.hover}`
@@ -194,7 +184,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>{item.shortLabel}</span>
                   {item.tag && (
                     <span
-                      className={`text-[9px] font-black uppercase px-1 rounded ${
+                      className={`hidden text-[9px] font-black uppercase px-1 rounded ${
                         isActive ? 'bg-black/20 text-white' : 'bg-amber-100 text-amber-800'
                       }`}
                     >
@@ -251,7 +241,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Daily Speed Challenge Pill */}
               {progress.dailyChallenge && (
                 <div
-                  className={`hidden md:flex items-center gap-0.5 px-2 py-0.75 rounded-xl text-xs font-black font-mono shadow-xs ${
+                  className={`hidden 2xl:flex items-center gap-0.5 px-2 py-0.75 rounded-xl text-xs font-black font-mono shadow-xs ${
                     progress.dailyChallenge.allCompleted
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
                       : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
@@ -278,9 +268,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
 
               {/* Student Name and Meta (Hidden on tiny mobile) */}
-              <div className="text-left hidden sm:block">
+              <div className="text-left hidden sm:block max-w-[112px]">
                 <div className="flex items-center gap-1.5">
-                  <div className="text-xs font-bold leading-tight group-hover:text-teal-600 transition-colors max-w-[100px] truncate">
+                  <div className="text-xs font-bold leading-tight group-hover:text-teal-600 transition-colors max-w-[88px] truncate">
                     {progress.studentName}
                   </div>
                   {session?.role === 'teacher' && (
@@ -288,9 +278,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                       Guru
                     </span>
                   )}
-                </div>
-                <div className="text-[10px] text-slate-400 leading-tight">
-                  {totalActivities} Modul · 🏅 {progress.earnedBadges.length}
                 </div>
               </div>
 
@@ -411,8 +398,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       )}
 
       {/* In-app Logout Confirmation Dialog */}
-      {isLogoutConfirmOpen && onLogout && (
-        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+      {isLogoutConfirmOpen && onLogout && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl shrink-0">
@@ -425,7 +412,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-              Yakin ingin keluar atau beralih ke akun siswa lain? Data progres yang tersimpan di Firebase tetap aman.
+              Yakin ingin keluar atau beralih ke akun siswa lain? Progres yang tersimpan di Database tetap aman.
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -452,7 +439,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </header>
   );

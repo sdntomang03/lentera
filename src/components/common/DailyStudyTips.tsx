@@ -111,8 +111,13 @@ export const DailyStudyTips: React.FC = () => {
                 <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
                   Tips Belajar Harian
                 </h3>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-teal-500 to-indigo-600 text-white shadow-xs">
-                  <span>✨</span> Powered by Gemini AI
+                <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-white shadow-xs ${
+                  tip.isAiGenerated
+                    ? 'bg-gradient-to-r from-teal-500 to-indigo-600'
+                    : 'bg-amber-600'
+                }`}>
+                  <span>{tip.isAiGenerated ? '✨' : 'ℹ️'}</span>
+                  {tip.isAiGenerated ? 'Powered by DeepSeek AI' : 'Tips cadangan'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">
@@ -246,6 +251,12 @@ export const DailyStudyTips: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {tip.generationError && (
+                  <p role="status" className="text-[11px] leading-relaxed text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Tips cadangan ditampilkan. {tip.generationError}
+                  </p>
+                )}
 
                 {/* Practical Action Tip Box */}
                 {tip.actionTip && (

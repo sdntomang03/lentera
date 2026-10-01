@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import {
   LiteracyPassage,
+  LiteracyQuestion,
   NumeracyQuestion,
   EducationLevel,
   LiteracyGenre,
@@ -12,24 +13,25 @@ import {
 } from '../../types';
 import { BADGES_DATA } from '../../data/badgesData';
 import {
-  fetchPassagesFromFirestore,
-  savePassageToFirestore,
-  deletePassageFromFirestore,
-  fetchNumeracyFromFirestore,
-  saveNumeracyToFirestore,
-  deleteNumeracyFromFirestore,
+  fetchPassagesFromApi,
+  savePassageToApi,
+  deletePassageFromApi,
+  fetchNumeracyFromApi,
+  saveNumeracyToApi,
+  deleteNumeracyFromApi,
   seedDefaultPassages,
   seedDefaultNumeracy,
-  seedFaseCContentToFirestore,
+  seedFaseCContentToApi,
   fetchAdminPortalConfig,
   saveAdminPortalConfig,
   AdminPortalConfig,
-  fetchAllUsersFromFirestore,
-  saveUserToFirestore,
-  deleteUserFromFirestore,
-  seedDemoStudentsToFirestore,
+  fetchAllUsersFromApi,
+  saveUserToApi,
+  createStudentFromAdmin,
+  deleteUserFromApi,
 } from '../../services/contentService';
 import { soundFx } from '../../utils/audio';
+import { generateLiteracyPassage, generateNumeracyQuestion } from '../../services/aiContentService';
 
 export interface TrashItem {
   id: string;
@@ -43,6 +45,8 @@ export interface TrashItem {
 interface AdminPanelProps {
   onContentUpdated: () => void;
   onClose: () => void;
+  isTeacher: boolean;
+  teacherWorkspace?: boolean;
   currentStudentName?: string;
   onSelectStudentProfile?: (student: UserProgress) => void;
 }
@@ -52,15 +56,12 @@ const AVATAR_OPTIONS = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   onContentUpdated,
   onClose,
+  isTeacher,
+  teacherWorkspace = false,
   currentStudentName,
   onSelectStudentProfile,
 }) => {
-  // Authentication PIN state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [pinInput, setPinInput] = useState<string>('');
-  const [pinError, setPinError] = useState<string>('');
   const [adminConfig, setAdminConfig] = useState<AdminPortalConfig>({
-    adminPin: '123456',
     schoolName: 'SD Negeri Nusantara',
     teacherName: 'Guru Penggerak',
   });
@@ -102,10 +103,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Passage Editor Modal
   const [isPassageEditorOpen, setIsPassageEditorOpen] = useState<boolean>(false);
   const [editingPassage, setEditingPassage] = useState<Partial<LiteracyPassage> | null>(null);
+  const [isGeneratingPassage, setIsGeneratingPassage] = useState<boolean>(false);
 
   // Numeracy Editor Modal
   const [isNumeracyEditorOpen, setIsNumeracyEditorOpen] = useState<boolean>(false);
   const [editingNumeracy, setEditingNumeracy] = useState<Partial<NumeracyQuestion> | null>(null);
+  const [isGeneratingNumeracy, setIsGeneratingNumeracy] = useState<boolean>(false);
 
   // User Editor Modal
   const [isUserEditorOpen, setIsUserEditorOpen] = useState<boolean>(false);
@@ -115,12 +118,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isNewUserModalOpen, setIsNewUserModalOpen] = useState<boolean>(false);
   const [newStudentForm, setNewStudentForm] = useState<{
     studentName: string;
+    username: string;
+    password: string;
     school: string;
     gradeLevel: string;
     avatar: string;
     initialPoints: number;
   }>({
     studentName: '',
+    username: '',
+    password: '',
     school: '',
     gradeLevel: 'Kelas 4 (Fase B)',
     avatar: '👦',
@@ -128,7 +135,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
 
   // Settings form state
-  const [newPin, setNewPin] = useState<string>('');
   const [newSchoolName, setNewSchoolName] = useState<string>('');
   const [newTeacherName, setNewTeacherName] = useState<string>('');
 
@@ -150,26 +156,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Initial load
   useEffect(() => {
     loadAdminConfig();
-  }, []);
+    if (isTeacher) void loadData();
+  }, [isTeacher]);
 
   const loadAdminConfig = async () => {
-    const cfg = await fetchAdminPortalConfig();
-    setAdminConfig(cfg);
-    setNewSchoolName(cfg.schoolName);
-    setNewTeacherName(cfg.teacherName);
-    setNewStudentForm((prev) => ({ ...prev, school: cfg.schoolName }));
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pinInput.trim() === adminConfig.adminPin.trim()) {
-      soundFx.playCorrect();
-      setIsAuthenticated(true);
-      setPinError('');
-      loadData();
-    } else {
-      soundFx.playWrong();
-      setPinError('PIN salah! Silakan coba lagi (Default PIN: 123456).');
+    try {
+      const cfg = await fetchAdminPortalConfig();
+      setAdminConfig(cfg);
+      setNewSchoolName(cfg.schoolName);
+      setNewTeacherName(cfg.teacherName);
+      setNewStudentForm((prev) => ({ ...prev, school: cfg.schoolName }));
+    } catch (error) {
+      console.error('Failed to load portal settings from Database:', error);
+      showError('Gagal memuat pengaturan portal dari Database.');
     }
   };
 
@@ -177,15 +176,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsLoading(true);
     try {
       const [pData, nData, uData] = await Promise.all([
-        fetchPassagesFromFirestore(),
-        fetchNumeracyFromFirestore(),
-        fetchAllUsersFromFirestore(),
+        fetchPassagesFromApi(),
+        fetchNumeracyFromApi(),
+        fetchAllUsersFromApi(),
       ]);
       setPassages(pData);
       setNumeracyList(nData);
       setUsers(uData);
     } catch (err) {
-      console.error('Failed to load content from Firestore:', err);
+      const message = err instanceof Error ? err.message : 'Kesalahan tidak diketahui.';
+      console.error('Failed to load content from Database:', err);
+      showError(`Gagal memuat konten dan data siswa dari Database: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -323,9 +324,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deletePassageFromFirestore(passage.id);
+          await deletePassageFromApi(passage.id);
         } catch (err) {
-          console.warn('Gagal menghapus dari Firebase Firestore, memperbarui state lokal:', err);
+          console.warn('Gagal menghapus dari Database, memperbarui state lokal:', err);
         }
         setPassages((prev) => prev.filter((item) => item.id !== passage.id));
 
@@ -363,16 +364,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     try {
       const fullPassage = editingPassage as LiteracyPassage;
-      await savePassageToFirestore(fullPassage);
+      await savePassageToApi(fullPassage);
       soundFx.playCorrect();
       confetti({ particleCount: 50, spread: 60 });
-      showNotification(`Bacaan "${fullPassage.title}" berhasil disimpan di Firebase Firestore!`);
+      showNotification(`Bacaan "${fullPassage.title}" berhasil disimpan di Database!`);
       setIsPassageEditorOpen(false);
       setEditingPassage(null);
       await loadData();
       onContentUpdated();
     } catch (err) {
-      showError('Gagal menyimpan ke database Firebase. Pastikan koneksi internet stabil.');
+      const message = err instanceof Error ? err.message : 'Kesalahan tidak diketahui.';
+      showError(`Gagal menyimpan bacaan: ${message}`);
+    }
+  };
+
+  const handleGeneratePassageWithAi = async () => {
+    if (!editingPassage) return;
+    soundFx.playClick();
+    setIsGeneratingPassage(true);
+    try {
+      const generated = await generateLiteracyPassage({
+        level: editingPassage.level || 'fase-b',
+        title: editingPassage.title?.trim() || '',
+        genre: editingPassage.genre || 'informasi',
+      });
+      setEditingPassage({
+        ...generated,
+        id: editingPassage.id || generated.id,
+      });
+      soundFx.playCorrect();
+      showNotification('Bacaan, kosakata, kuis, kunci jawaban, dan pembahasan berhasil dibuat dengan DeepSeek AI. Periksa lalu simpan ke Database.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Kesalahan tidak diketahui.';
+      showError(`Gagal membuat bacaan dengan AI: ${message}`);
+    } finally {
+      setIsGeneratingPassage(false);
     }
   };
 
@@ -474,9 +500,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deleteNumeracyFromFirestore(q.id);
+          await deleteNumeracyFromApi(q.id);
         } catch (err) {
-          console.warn('Gagal menghapus soal dari Firestore, memperbarui state lokal:', err);
+          console.warn('Gagal menghapus soal dari Database, memperbarui state lokal:', err);
         }
         setNumeracyList((prev) => prev.filter((item) => item.id !== q.id));
 
@@ -511,13 +537,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsLoading(true);
     try {
       if (item.type === 'literasi') {
-        await savePassageToFirestore(item.data);
+        await savePassageToApi(item.data);
         setPassages((prev) => [item.data, ...prev.filter((p) => p.id !== item.id)]);
       } else if (item.type === 'numerasi') {
-        await saveNumeracyToFirestore(item.data);
+        await saveNumeracyToApi(item.data);
         setNumeracyList((prev) => [item.data, ...prev.filter((q) => q.id !== item.id)]);
       } else if (item.type === 'user') {
-        await saveUserToFirestore(item.data);
+        await saveUserToApi(item.data);
         setUsers((prev) => [item.data, ...prev.filter((u) => (u.id || u.studentName) !== item.id)]);
       }
 
@@ -574,11 +600,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     try {
       for (const item of trashItems) {
         if (item.type === 'literasi') {
-          await savePassageToFirestore(item.data);
+          await savePassageToApi(item.data);
         } else if (item.type === 'numerasi') {
-          await saveNumeracyToFirestore(item.data);
+          await saveNumeracyToApi(item.data);
         } else if (item.type === 'user') {
-          await saveUserToFirestore(item.data);
+          await saveUserToApi(item.data);
         }
       }
       setTrashItems([]);
@@ -625,7 +651,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     soundFx.playClick();
     setIsLoading(true);
     try {
-      const res = await seedFaseCContentToFirestore();
+      const res = await seedFaseCContentToApi();
       soundFx.playCorrect();
       confetti({ particleCount: 60, spread: 70 });
       showNotification(`Berhasil menyinkronkan konten resmi Fase C (Kelas 5-6 SD): ${res.passagesCount} bacaan & ${res.numeracyCount} soal ke database!`);
@@ -647,16 +673,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     try {
       const fullNumeracy = editingNumeracy as NumeracyQuestion;
-      await saveNumeracyToFirestore(fullNumeracy);
+      await saveNumeracyToApi(fullNumeracy);
       soundFx.playCorrect();
       confetti({ particleCount: 50, spread: 60 });
-      showNotification(`Soal "${fullNumeracy.title}" berhasil disimpan di Firebase Firestore!`);
+      showNotification(`Soal "${fullNumeracy.title}" berhasil disimpan di Database!`);
       setIsNumeracyEditorOpen(false);
       setEditingNumeracy(null);
       await loadData();
       onContentUpdated();
     } catch (err) {
-      showError('Gagal menyimpan ke database Firebase. Pastikan koneksi internet stabil.');
+      showError('Gagal menyimpan ke database Database. Pastikan koneksi internet stabil.');
+    }
+  };
+
+  const handleGenerateNumeracyWithAi = async () => {
+    if (!editingNumeracy) return;
+    soundFx.playClick();
+    setIsGeneratingNumeracy(true);
+    try {
+      const generated = await generateNumeracyQuestion({
+        level: editingNumeracy.level || 'fase-b',
+        title: editingNumeracy.title?.trim() || '',
+        domain: editingNumeracy.domain || 'bilangan',
+        context: editingNumeracy.context || 'personal',
+      });
+      setEditingNumeracy({
+        ...generated,
+        id: editingNumeracy.id || generated.id,
+      });
+      soundFx.playCorrect();
+      showNotification('Stimulus, soal, pilihan, kunci jawaban, petunjuk, dan pembahasan berhasil dibuat dengan DeepSeek AI. Periksa lalu simpan ke Database.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Kesalahan tidak diketahui.';
+      showError(`Gagal membuat soal numerasi dengan AI: ${message}`);
+    } finally {
+      setIsGeneratingNumeracy(false);
     }
   };
 
@@ -665,6 +716,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     soundFx.playClick();
     setNewStudentForm({
       studentName: '',
+      username: '',
+      password: '',
       school: adminConfig.schoolName || 'SD Negeri Nusantara',
       gradeLevel: 'Kelas 4 (Fase B)',
       avatar: '👦',
@@ -679,11 +732,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showError('Nama siswa wajib diisi.');
       return;
     }
+    if (!/^[a-zA-Z0-9_-]{3,40}$/.test(newStudentForm.username.trim())) {
+      showError('Username harus 3–40 karakter dan hanya boleh berisi huruf, angka, garis bawah, atau tanda hubung.');
+      return;
+    }
+    if (newStudentForm.password.length < 8) {
+      showError('Kata sandi siswa minimal 8 karakter.');
+      return;
+    }
 
     const todayStr = new Date().toISOString().split('T')[0];
     const newStudent: UserProgress = {
-      id: `student-${Date.now()}`,
       studentName: newStudentForm.studentName.trim(),
+      username: newStudentForm.username.trim().toLowerCase(),
       school: newStudentForm.school.trim() || adminConfig.schoolName,
       gradeLevel: newStudentForm.gradeLevel,
       avatar: newStudentForm.avatar || '👦',
@@ -707,14 +768,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     };
 
     try {
-      await saveUserToFirestore(newStudent);
+      const studentId = await createStudentFromAdmin(newStudent, newStudentForm.password);
       soundFx.playCorrect();
       confetti({ particleCount: 60, spread: 70 });
-      showNotification(`Siswa "${newStudent.studentName}" berhasil didaftarkan di Firebase!`);
+      showNotification(`Siswa "${newStudent.studentName}" berhasil didaftarkan dengan username ${newStudent.username} (ID ${studentId}).`);
       setIsNewUserModalOpen(false);
       await loadData();
     } catch (err) {
-      showError('Gagal mendaftarkan siswa ke Firebase.');
+      showError(err instanceof Error ? err.message : 'Gagal mendaftarkan siswa melalui API.');
     }
   };
 
@@ -733,10 +794,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     try {
       const fullUser = editingUser as UserProgress;
-      await saveUserToFirestore(fullUser);
+      await saveUserToApi(fullUser);
       soundFx.playCorrect();
       confetti({ particleCount: 50, spread: 60 });
-      showNotification(`Data siswa "${fullUser.studentName}" berhasil diperbarui di Firestore!`);
+      showNotification(`Data siswa "${fullUser.studentName}" berhasil diperbarui di Database!`);
       setIsUserEditorOpen(false);
       setEditingUser(null);
       await loadData();
@@ -744,7 +805,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         onSelectStudentProfile(fullUser);
       }
     } catch (err) {
-      showError('Gagal memperbarui data siswa di Firestore.');
+      showError(err instanceof Error ? err.message : 'Gagal memperbarui data siswa di Database.');
     }
   };
 
@@ -763,9 +824,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deleteUserFromFirestore(userId, name);
+          await deleteUserFromApi(userId, name);
         } catch (err) {
-          console.warn('Gagal menghapus akun siswa dari Firestore, memperbarui state lokal:', err);
+          console.warn('Gagal menghapus akun siswa dari Database, memperbarui state lokal:', err);
         }
         setUsers((prev) =>
           prev.filter((u) => (u.id || u.studentName) !== userId && u.studentName !== name)
@@ -815,9 +876,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           streakCount: 1,
         };
         try {
-          await saveUserToFirestore(resetUser);
+          await saveUserToApi(resetUser);
         } catch (err) {
-          console.warn('Gagal mereset siswa di Firestore:', err);
+          console.warn('Gagal mereset siswa di Database:', err);
         }
         setUsers((prev) =>
           prev.map((u) =>
@@ -841,37 +902,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleSeedDemoStudents = () => {
-    soundFx.playClick();
-    setConfirmDialog({
-      isOpen: true,
-      title: 'Muat Siswa Contoh',
-      message: 'Muat data daftar siswa percontohan Kurikulum Merdeka ke Firebase?',
-      confirmLabel: 'Ya, Muat Data',
-      isDestructive: false,
-      onConfirm: async () => {
-        setIsLoading(true);
-        try {
-          await seedDemoStudentsToFirestore();
-          await loadData();
-          soundFx.playFanfare();
-          showNotification('Daftar siswa contoh berhasil dimuat ke database Firebase!');
-        } catch (err) {
-          showNotification('Gagal memuat siswa contoh ke database.');
-        } finally {
-          setIsLoading(false);
-        }
-      },
-    });
-  };
-
   // --- SEED DEFAULT RESTORE ---
   const handleResetDefaults = () => {
     soundFx.playClick();
     setConfirmDialog({
       isOpen: true,
       title: 'Sinkronisasi Materi Standar',
-      message: 'Sinkronisasi ulang semua materi standar Kurikulum Merdeka ke database Firebase Anda?',
+      message: 'Sinkronisasi ulang semua materi standar Kurikulum Merdeka ke database Database Anda?',
       confirmLabel: 'Ya, Sinkronkan',
       isDestructive: false,
       onConfirm: async () => {
@@ -880,10 +917,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           await Promise.all([seedDefaultPassages(), seedDefaultNumeracy()]);
           await loadData();
           soundFx.playFanfare();
-          showNotification('Materi standar Kurikulum Merdeka berhasil disinkronkan ke Firebase!');
+          showNotification('Materi standar Kurikulum Merdeka berhasil disinkronkan ke Database!');
           onContentUpdated();
         } catch (err) {
-          showNotification('Gagal menyinkronkan materi ke Firebase.');
+          showNotification('Gagal menyinkronkan materi ke Database.');
         } finally {
           setIsLoading(false);
         }
@@ -895,7 +932,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     const updated: AdminPortalConfig = {
-      adminPin: newPin.trim() ? newPin.trim() : adminConfig.adminPin,
       schoolName: newSchoolName.trim() || 'SD Negeri Nusantara',
       teacherName: newTeacherName.trim() || 'Guru Penggerak',
     };
@@ -904,9 +940,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setAdminConfig(updated);
       soundFx.playCorrect();
       showNotification('Pengaturan portal guru berhasil diperbarui!');
-      setNewPin('');
     } catch (err) {
-      showError('Gagal menyimpan pengaturan ke Firebase.');
+      showError('Gagal menyimpan pengaturan ke Database.');
     }
   };
 
@@ -938,12 +973,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const filteredUsers = users.filter(
     (u) =>
       u.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (u.school && u.school.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (u.gradeLevel && u.gradeLevel.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // --- LOGIN SCREEN ---
-  if (!isAuthenticated) {
+  if (!isTeacher) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
         <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-100 relative">
@@ -961,53 +997,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <h2 className="text-2xl font-black text-slate-900">Portal Guru & Admin</h2>
             <p className="text-xs text-slate-500">
-              Kelola materi pembelajaran dan <strong className="text-teal-800">data akun pengguna / siswa</strong> yang tersimpan di{' '}
-              <strong className="text-teal-800">Firebase Firestore</strong>.
+              Panel ini hanya tersedia untuk akun guru yang telah masuk melalui Database.
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Masukkan PIN Guru:
-              </label>
-              <input
-                type="password"
-                maxLength={8}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="PIN 6 digit (Default: 123456)"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xl font-mono tracking-widest font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
-                autoFocus
-              />
-              {pinError && <p className="text-xs text-red-600 font-medium mt-1.5">{pinError}</p>}
-            </div>
-
-            <div className="p-3 bg-teal-50 rounded-xl border border-teal-200 text-[11px] text-teal-900 space-y-1">
-              <div className="font-bold flex items-center gap-1.5">
-                <span>💡</span> Informasi Akses Guru:
-              </div>
-              <p>
-                PIN bawaan sistem adalah <strong className="font-mono bg-teal-100 px-1 py-0.5 rounded">123456</strong>. Anda dapat mengubah PIN ini kapan saja di menu Pengaturan.
-              </p>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-2.5 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
-              >
-                Masuk Portal ➔
-              </button>
-            </div>
-          </form>
+          <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-teal-800 text-white font-bold text-xs">
+            Tutup
+          </button>
         </div>
       </div>
     );
@@ -1015,7 +1011,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // --- MAIN ADMIN INTERFACE ---
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-100 overflow-hidden animate-in fade-in duration-200">
+    <div className={teacherWorkspace
+      ? 'min-h-screen w-full flex flex-col bg-slate-100'
+      : 'fixed inset-0 z-50 flex flex-col bg-slate-100 overflow-hidden animate-in fade-in duration-200'}>
       {/* Top Header */}
       <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 shrink-0 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -1024,10 +1022,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-slate-900">Panel Kelola Konten & Pengguna</h1>
+              <h1 className="text-lg font-black text-slate-900">
+                {teacherWorkspace ? 'Ruang Kerja Guru' : 'Panel Kelola Konten & Pengguna'}
+              </h1>
               <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Firebase Connected
+                Database Connected
               </span>
             </div>
             <p className="text-xs text-slate-500">
@@ -1041,7 +1041,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             onClick={loadData}
             disabled={isLoading}
             className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            title="Muat Ulang Data dari Firebase"
+            title="Muat Ulang Data dari Database"
           >
             <span>🔄</span> Segarkan
           </button>
@@ -1049,7 +1049,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
           >
-            Tutup Panel ✕
+            {teacherWorkspace ? 'Keluar Akun' : 'Tutup Panel ✕'}
           </button>
         </div>
       </header>
@@ -1108,7 +1108,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           >
             👥 Siswa ({users.length})
           </button>
-          <button
+          {!teacherWorkspace && <button
             onClick={() => {
               soundFx.playClick();
               setActiveTab('trash');
@@ -1125,7 +1125,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {trashItems.length}
               </span>
             )}
-          </button>
+          </button>}
           <button
             onClick={() => {
               soundFx.playClick();
@@ -1137,7 +1137,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            🔒 Pengaturan PIN
+            🏫 Sekolah & Guru
           </button>
         </div>
 
@@ -1167,7 +1167,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <button
               onClick={handleSeedFaseCContent}
               className="hidden lg:flex px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold items-center gap-1 cursor-pointer shadow-2xs"
-              title="Muat konten kurikulum resmi Fase C ke Firebase"
+              title="Muat konten kurikulum resmi Fase C ke Database"
             >
               <span>📥</span> Sinkron Fase C
             </button>
@@ -1199,7 +1199,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <button
               onClick={handleSeedFaseCContent}
               className="hidden lg:flex px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold items-center gap-1 cursor-pointer shadow-2xs"
-              title="Muat soal kurikulum resmi Fase C ke Firebase"
+              title="Muat soal kurikulum resmi Fase C ke Database"
             >
               <span>📥</span> Sinkron Fase C
             </button>
@@ -1239,7 +1239,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Cari nama siswa atau kelas..."
+              placeholder="Cari nama, username, atau kelas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-700 w-48 sm:w-60"
@@ -1250,13 +1250,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             >
               <span>➕</span> Daftarkan Siswa Baru
             </button>
-            <button
-              onClick={handleSeedDemoStudents}
-              className="hidden lg:flex px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold items-center gap-1 cursor-pointer"
-              title="Muat data daftar siswa kelas contoh"
-            >
-              <span>📥</span> Contoh Kelas
-            </button>
           </div>
         )}
 
@@ -1264,7 +1257,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <button
             onClick={handleResetDefaults}
             className="px-3.5 py-1.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            title="Muat ulang konten standar Kurikulum Merdeka ke Firebase"
+            title="Muat ulang konten standar Kurikulum Merdeka ke Database"
           >
             <span>📥</span> Pulihkan Materi Standar AKM
           </button>
@@ -1305,11 +1298,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* Main Body List Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-36 sm:pb-44 space-y-6">
+      <div className={teacherWorkspace
+        ? 'flex-1 p-4 sm:p-8 pb-36 sm:pb-44 space-y-6'
+        : 'flex-1 overflow-y-auto p-4 sm:p-8 pb-36 sm:pb-44 space-y-6'}>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-3">
             <div className="w-10 h-10 border-4 border-teal-700 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-medium">Menghubungkan ke database Firebase Firestore...</p>
+            <p className="text-xs font-medium">Menghubungkan ke database Database...</p>
           </div>
         ) : (
           <>
@@ -1318,9 +1313,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-xs text-slate-500">
                   <span>
-                    Menampilkan <strong>{filteredPassages.length}</strong> bacaan tersimpan di Firestore
+                    Menampilkan <strong>{filteredPassages.length}</strong> bacaan tersimpan di Database
                   </span>
-                  <span>Database: Cloud Firestore Collection <code>passages</code></span>
+                  <span>Database: Cloud Database Collection <code>passages</code></span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1391,9 +1386,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-xs text-slate-500">
                   <span>
-                    Menampilkan <strong>{filteredNumeracy.length}</strong> butir soal tersimpan di Firestore
+                    Menampilkan <strong>{filteredNumeracy.length}</strong> butir soal tersimpan di Database
                   </span>
-                  <span>Database: Cloud Firestore Collection <code>questions</code></span>
+                  <span>Database: Cloud Database Collection <code>questions</code></span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1467,12 +1462,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       Total Siswa Terdata: <strong className="text-slate-900 font-bold">{users.length}</strong>
                     </span>
                     <span>
-                      Koleksi Firestore: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-emerald-800 font-bold">users</code>
+                      Koleksi Database: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-emerald-800 font-bold">users</code>
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Profil aktif saat ini: <strong className="text-teal-900">{currentStudentName || 'Budi Pratama'}</strong></span>
+                    <span>{teacherWorkspace ? 'Akun siswa dikelola melalui database Laravel.' : <>Profil aktif saat ini: <strong className="text-teal-900">{currentStudentName || 'Belum dipilih'}</strong></>}</span>
                   </div>
                 </div>
 
@@ -1508,6 +1503,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 </div>
                                 <p className="text-xs text-slate-500 font-medium line-clamp-1">
                                   {user.school || adminConfig.schoolName} · {user.gradeLevel || 'Kelas 4'}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  Username: <span className="font-semibold text-slate-700">{user.username || 'Belum tersedia'}</span>
                                 </p>
                               </div>
                             </div>
@@ -1563,7 +1561,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                         {/* Card Action Buttons */}
                         <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                          {!isCurrent && onSelectStudentProfile ? (
+                          {onSelectStudentProfile && !isCurrent ? (
                             <button
                               onClick={() => handleSelectStudentAsActive(user)}
                               className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 text-xs font-bold transition-colors cursor-pointer"
@@ -1571,11 +1569,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             >
                               🎒 Jadikan Aktif
                             </button>
-                          ) : (
+                          ) : onSelectStudentProfile ? (
                             <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
                               ✓ Akun Terpilih
                             </span>
-                          )}
+                          ) : null}
 
                           <div className="flex items-center gap-1.5">
                             <button
@@ -1595,7 +1593,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <button
                               onClick={() => handleDeleteUser(user.id || user.studentName, user.studentName)}
                               className="px-2.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                              title="Hapus akun siswa dari Firebase"
+                              title="Hapus akun siswa dari Database"
                               aria-label={`Hapus akun siswa ${user.studentName}`}
                             >
                               <span>🗑️</span>
@@ -1744,9 +1742,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {activeTab === 'settings' && (
               <div className="max-w-xl mx-auto bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-xs">
                 <div className="space-y-1">
-                  <h2 className="text-xl font-bold text-slate-900">Pengaturan Identitas & PIN Guru</h2>
+                  <h2 className="text-xl font-bold text-slate-900">Pengaturan Identitas Sekolah & Guru</h2>
                   <p className="text-xs text-slate-500">
-                    Atur PIN keamanan agar siswa tidak dapat sembarangan mengubah atau menghapus materi dan data kelas.
+                    Atur identitas sekolah dan guru yang ditampilkan pada portal pembelajaran.
                   </p>
                 </div>
 
@@ -1775,23 +1773,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Ubah PIN Admin (Kosongkan jika tidak ingin ganti):
-                    </label>
-                    <input
-                      type="password"
-                      maxLength={8}
-                      placeholder="PIN baru (contoh: 654321)"
-                      value={newPin}
-                      onChange={(e) => setNewPin(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      PIN saat ini: <strong className="font-mono text-slate-700">{adminConfig.adminPin}</strong>
-                    </p>
-                  </div>
-
                   <div className="pt-4 border-t border-slate-100 flex justify-end">
                     <button
                       type="submit"
@@ -1814,7 +1795,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <span>📖</span> Editor Teks Bacaan Literasi (Firebase)
+                <span>📖</span> Editor Teks Bacaan Literasi (Database)
               </h2>
               <button
                 onClick={() => setIsPassageEditorOpen(false)}
@@ -1826,6 +1807,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             {/* Modal Form */}
             <form onSubmit={handleSavePassage} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                <div>
+                  <p className="text-sm font-bold text-teal-950">Buat bacaan dan kuis otomatis</p>
+                  <p className="mt-1 text-xs text-teal-800">AI menyiapkan teks, kosakata, 4 soal pilihan ganda, kunci, dan pembahasan.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGeneratePassageWithAi}
+                  disabled={isGeneratingPassage}
+                  className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <span className={isGeneratingPassage ? 'animate-spin' : ''}>{isGeneratingPassage ? '⏳' : '✨'}</span>
+                  {isGeneratingPassage ? 'AI sedang menulis...' : 'Buat dengan DeepSeek AI'}
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Judul Cerita / Bacaan:</label>
@@ -2042,7 +2038,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-900">
-                    Butir Soal Asesmen AKM ({editingPassage.questions?.length || 0}):
+                    Kuis Pemahaman Teks ({editingPassage.questions?.length || 0}):
                   </span>
                   <button
                     type="button"
@@ -2111,35 +2107,118 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </select>
                       </div>
 
-                      <div>
-                        <label className="text-[10px] text-slate-500 font-bold">Kunci Jawaban Benar:</label>
-                        <input
-                          type="text"
-                          placeholder="Harus sama persis dengan salah satu opsi"
-                          value={q.correctAnswers as string}
-                          onChange={(e) => {
-                            const next = [...(editingPassage.questions || [])];
-                            next[qIdx].correctAnswers = e.target.value;
-                            setEditingPassage({ ...editingPassage, questions: next });
-                          }}
-                          className="w-full px-2 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950"
-                        />
-                      </div>
+                      {q.options?.length ? (
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-bold">Pilih Kunci Jawaban:</label>
+                          <select
+                            value={typeof q.correctAnswers === 'string' ? q.correctAnswers : ''}
+                            onChange={(e) => {
+                              const next = [...(editingPassage.questions || [])];
+                              next[qIdx].correctAnswers = e.target.value;
+                              setEditingPassage({ ...editingPassage, questions: next });
+                            }}
+                            className="w-full px-2 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950"
+                          >
+                            <option value="" disabled>Pilih jawaban benar</option>
+                            {q.options.map((option, optionIdx) => (
+                              <option key={`${q.id}-answer-${optionIdx}`} value={option}>
+                                {String.fromCharCode(65 + optionIdx)}. {option || '(Opsi kosong)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-bold">Kunci Jawaban Benar:</label>
+                          <input
+                            type="text"
+                            value={String(q.correctAnswers)}
+                            onChange={(e) => {
+                              const next = [...(editingPassage.questions || [])];
+                              next[qIdx].correctAnswers = e.target.value;
+                              setEditingPassage({ ...editingPassage, questions: next });
+                            }}
+                            className="w-full px-2 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-slate-500 font-bold">Opsi Pilihan (Pisahkan dengan tanda koma):</label>
-                      <input
-                        type="text"
-                        placeholder="Opsi A, Opsi B, Opsi C, Opsi D"
-                        value={(q.options || []).join(', ')}
-                        onChange={(e) => {
+                      <label className="text-[10px] text-slate-500 font-bold">Opsi Pilihan (pilih radio untuk menetapkan kunci):</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                        {(q.options || []).map((option, optionIdx) => (
+                          <div
+                            key={`${q.id}-option-${optionIdx}`}
+                            className={`flex items-center gap-2 rounded-xl border p-2 ${
+                              q.correctAnswers === option
+                                ? 'border-emerald-400 bg-emerald-50'
+                                : 'border-slate-200 bg-slate-50'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`literacy-answer-${q.id}`}
+                              checked={q.correctAnswers === option}
+                              aria-label={`Jadikan opsi ${String.fromCharCode(65 + optionIdx)} sebagai jawaban benar`}
+                              onChange={() => {
+                                const next = [...(editingPassage.questions || [])];
+                                next[qIdx].correctAnswers = option;
+                                setEditingPassage({ ...editingPassage, questions: next });
+                              }}
+                              className="h-4 w-4 accent-emerald-700"
+                            />
+                            <span className="text-xs font-bold text-slate-500">{String.fromCharCode(65 + optionIdx)}.</span>
+                            <input
+                              type="text"
+                              value={option}
+                              aria-label={`Teks opsi ${String.fromCharCode(65 + optionIdx)}`}
+                              onChange={(e) => {
+                                const next = [...(editingPassage.questions || [])];
+                                const previousOption = next[qIdx].options?.[optionIdx];
+                                if (!next[qIdx].options) next[qIdx].options = [];
+                                next[qIdx].options![optionIdx] = e.target.value;
+                                if (next[qIdx].correctAnswers === previousOption) {
+                                  next[qIdx].correctAnswers = e.target.value;
+                                }
+                                setEditingPassage({ ...editingPassage, questions: next });
+                              }}
+                              className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none"
+                            />
+                            {(q.options || []).length > 2 && (
+                              <button
+                                type="button"
+                                aria-label={`Hapus opsi ${String.fromCharCode(65 + optionIdx)}`}
+                                onClick={() => {
+                                  const next = [...(editingPassage.questions || [])];
+                                  const nextOptions = (next[qIdx].options || []).filter((_, idx) => idx !== optionIdx);
+                                  next[qIdx].options = nextOptions;
+                                  if (!nextOptions.includes(String(next[qIdx].correctAnswers))) {
+                                    next[qIdx].correctAnswers = nextOptions[0] || '';
+                                  }
+                                  setEditingPassage({ ...editingPassage, questions: next });
+                                }}
+                                className="text-slate-400 hover:text-red-600"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={(q.options || []).length >= 6}
+                        onClick={() => {
                           const next = [...(editingPassage.questions || [])];
-                          next[qIdx].options = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                          const nextOptions = [...(next[qIdx].options || []), `Opsi ${(next[qIdx].options || []).length + 1}`];
+                          next[qIdx].options = nextOptions;
                           setEditingPassage({ ...editingPassage, questions: next });
                         }}
-                        className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                      />
+                        className="mt-2 text-[11px] font-bold text-teal-800 hover:underline disabled:opacity-50"
+                      >
+                        + Tambah Opsi
+                      </button>
                     </div>
 
                     <input
@@ -2170,7 +2249,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs shadow-xs cursor-pointer"
                 >
-                  Simpan Bacaan ke Firebase
+                  Simpan Bacaan ke Database
                 </button>
               </div>
             </form>
@@ -2185,7 +2264,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <span>🧮</span> Editor Soal Numerasi Kontekstual (Firebase)
+                <span>🧮</span> Editor Soal Numerasi Kontekstual (Database)
               </h2>
               <button
                 onClick={() => setIsNumeracyEditorOpen(false)}
@@ -2197,6 +2276,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             {/* Modal Form */}
             <form onSubmit={handleSaveNumeracy} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                <div>
+                  <p className="text-sm font-bold text-indigo-950">Buat soal numerasi otomatis</p>
+                  <p className="mt-1 text-xs text-indigo-800">AI menyiapkan stimulus, soal, empat opsi, kunci, petunjuk, dan pembahasan bertahap.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGenerateNumeracyWithAi}
+                  disabled={isGeneratingNumeracy}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-900 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <span className={isGeneratingNumeracy ? 'animate-spin' : ''}>{isGeneratingNumeracy ? '⏳' : '✨'}</span>
+                  {isGeneratingNumeracy ? 'AI sedang menyusun...' : 'Buat dengan DeepSeek AI'}
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Judul Soal Asesmen:</label>
@@ -2342,39 +2436,118 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {editingNumeracy.type === 'single-choice' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Opsi Pilihan Ganda (Pisahkan dengan koma):
+                    Opsi Pilihan Ganda (pilih radio untuk menetapkan kunci):
                   </label>
-                  <input
-                    type="text"
-                    value={(editingNumeracy.options || []).join(', ')}
-                    onChange={(e) =>
-                      setEditingNumeracy({
-                        ...editingNumeracy,
-                        options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                      })
-                    }
-                    placeholder="Contoh: 15.000, 20.000, 25.000, 30.000"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-700"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(editingNumeracy.options || []).map((option, optionIdx) => (
+                      <div
+                        key={`numeracy-option-${optionIdx}`}
+                        className={`flex items-center gap-2 rounded-xl border p-3 ${
+                          editingNumeracy.correctAnswer === option
+                            ? 'border-emerald-400 bg-emerald-50'
+                            : 'border-slate-200 bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="numeracy-correct-answer"
+                          checked={editingNumeracy.correctAnswer === option}
+                          aria-label={`Jadikan opsi ${String.fromCharCode(65 + optionIdx)} sebagai jawaban benar`}
+                          onChange={() => setEditingNumeracy({ ...editingNumeracy, correctAnswer: option })}
+                          className="h-4 w-4 accent-emerald-700"
+                        />
+                        <span className="text-xs font-bold text-slate-500">{String.fromCharCode(65 + optionIdx)}.</span>
+                        <input
+                          type="text"
+                          value={option}
+                          aria-label={`Teks opsi ${String.fromCharCode(65 + optionIdx)}`}
+                          onChange={(e) => {
+                            const options = [...(editingNumeracy.options || [])];
+                            const previousOption = options[optionIdx];
+                            options[optionIdx] = e.target.value;
+                            setEditingNumeracy({
+                              ...editingNumeracy,
+                              options,
+                              correctAnswer: editingNumeracy.correctAnswer === previousOption
+                                ? e.target.value
+                                : editingNumeracy.correctAnswer,
+                            });
+                          }}
+                          className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none"
+                        />
+                        {(editingNumeracy.options || []).length > 2 && (
+                          <button
+                            type="button"
+                            aria-label={`Hapus opsi ${String.fromCharCode(65 + optionIdx)}`}
+                            onClick={() => {
+                              const options = (editingNumeracy.options || []).filter((_, idx) => idx !== optionIdx);
+                              setEditingNumeracy({
+                                ...editingNumeracy,
+                                options,
+                                correctAnswer: options.includes(String(editingNumeracy.correctAnswer))
+                                  ? editingNumeracy.correctAnswer
+                                  : options[0] || '',
+                              });
+                            }}
+                            className="text-slate-400 hover:text-red-600"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={(editingNumeracy.options || []).length >= 6}
+                    onClick={() => setEditingNumeracy({
+                      ...editingNumeracy,
+                      options: [...(editingNumeracy.options || []), `Opsi ${(editingNumeracy.options || []).length + 1}`],
+                    })}
+                    className="mt-2 text-[11px] font-bold text-indigo-800 hover:underline disabled:opacity-50"
+                  >
+                    + Tambah Opsi
+                  </button>
                 </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Kunci Jawaban Benar:</label>
-                  <input
-                    type="text"
-                    required
-                    value={String(editingNumeracy.correctAnswer ?? '')}
-                    onChange={(e) => {
-                      const val = editingNumeracy.type === 'numeric'
-                        ? parseFloat(e.target.value) || e.target.value
-                        : e.target.value;
-                      setEditingNumeracy({ ...editingNumeracy, correctAnswer: val });
-                    }}
-                    placeholder="Kunci jawaban tepat"
-                    className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-700"
-                  />
+                  {editingNumeracy.type === 'single-choice' && (editingNumeracy.options || []).length > 0 ? (
+                    <>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Kunci Jawaban Benar:</label>
+                      <select
+                        required
+                        value={String(editingNumeracy.correctAnswer ?? '')}
+                        onChange={(e) => setEditingNumeracy({ ...editingNumeracy, correctAnswer: e.target.value })}
+                        className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                      >
+                        <option value="" disabled>Pilih jawaban benar</option>
+                        {(editingNumeracy.options || []).map((option, index) => (
+                          <option key={`answer-option-${index}`} value={option}>
+                            {String.fromCharCode(65 + index)}. {option || '(Opsi kosong)'}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    <>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Kunci Jawaban Benar:</label>
+                      <input
+                        type="text"
+                        required
+                        value={String(editingNumeracy.correctAnswer ?? '')}
+                        onChange={(e) => {
+                          const val = editingNumeracy.type === 'numeric'
+                            ? parseFloat(e.target.value) || e.target.value
+                            : e.target.value;
+                          setEditingNumeracy({ ...editingNumeracy, correctAnswer: val });
+                        }}
+                        placeholder="Kunci jawaban tepat"
+                        className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                      />
+                    </>
+                  )}
                 </div>
 
                 <div>
@@ -2420,7 +2593,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-indigo-800 hover:bg-indigo-900 text-white font-bold text-xs shadow-xs cursor-pointer"
                 >
-                  Simpan Soal ke Firebase
+                  Simpan Soal ke Database
                 </button>
               </div>
             </form>
@@ -2454,6 +2627,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setNewStudentForm({ ...newStudentForm, studentName: e.target.value })}
                   placeholder="Contoh: Muhammad Rizky Pratama"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Username untuk masuk:</label>
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  maxLength={40}
+                  pattern="[A-Za-z0-9_-]{3,40}"
+                  value={newStudentForm.username}
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, username: e.target.value })}
+                  placeholder="Contoh: farhan_2026"
+                  autoComplete="username"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">3–40 karakter: huruf, angka, garis bawah, atau tanda hubung.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Kata sandi awal (minimal 8 karakter):</label>
+                <input
+                  type="password"
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                  value={newStudentForm.password}
+                  onChange={(e) => setNewStudentForm({ ...newStudentForm, password: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
                 />
               </div>
 
@@ -2526,7 +2729,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs shadow-xs cursor-pointer"
                 >
-                  Daftarkan Siswa ke Firebase
+                  Daftarkan Siswa ke Database
                 </button>
               </div>
             </form>
@@ -2560,6 +2763,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setEditingUser({ ...editingUser, studentName: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Username untuk masuk:</label>
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  maxLength={40}
+                  pattern="[A-Za-z0-9_-]{3,40}"
+                  value={editingUser.username || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                  autoComplete="username"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">Username unik, 3–40 karakter: huruf, angka, garis bawah, atau tanda hubung.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2685,7 +2904,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs shadow-xs cursor-pointer"
                 >
-                  Simpan Perubahan ke Firebase
+                  Simpan Perubahan ke Database
                 </button>
               </div>
             </form>

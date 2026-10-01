@@ -1,145 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { UserProgress, AuthSession, SUPPORTED_GRADE_LEVEL_OPTIONS } from '../../types';
-import {
-  fetchAllUsersFromFirestore,
-  saveUserToFirestore,
-  fetchAdminPortalConfig,
-  AdminPortalConfig,
-  seedDemoStudentsToFirestore,
-} from '../../services/contentService';
+import { fetchAdminPortalConfig, AdminPortalConfig } from '../../services/contentService';
+import { login, registerStudent } from '../../services/authService';
 import { soundFx } from '../../utils/audio';
 import { getTodayDateString } from '../../utils/streak';
 
 interface LoginViewProps {
   onLoginSuccess: (session: AuthSession, progressData?: UserProgress) => void;
-  onOpenAdminDirect?: () => void;
 }
 
 const AVATAR_LIST = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '⭐', '📚', '🎨', '🌟', '🦁'];
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
-  onOpenAdminDirect,
 }) => {
   const [roleTab, setRoleTab] = useState<'student' | 'teacher'>('student');
   const [studentMode, setStudentMode] = useState<'select' | 'register'>('select');
 
-  // Firestore students data
-  const [students, setStudents] = useState<UserProgress[]>([]);
-  const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(true);
-  const [searchStudentQuery, setSearchStudentQuery] = useState<string>('');
   const [studentUsername, setStudentUsername] = useState<string>('');
   const [studentPassword, setStudentPassword] = useState<string>('');
   const [studentLoginError, setStudentLoginError] = useState<string>('');
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   // Admin / Teacher config & login
   const [adminConfig, setAdminConfig] = useState<AdminPortalConfig>({
-    adminPin: '123456',
     schoolName: 'SD Negeri Nusantara',
     teacherName: 'Guru Penggerak',
   });
   const [teacherPinInput, setTeacherPinInput] = useState<string>('');
   const [teacherUsername, setTeacherUsername] = useState<string>('');
-  const [teacherNameInput, setTeacherNameInput] = useState<string>('');
   const [teacherPinError, setTeacherPinError] = useState<string>('');
+  const [isTeacherLoggingIn, setIsTeacherLoggingIn] = useState<boolean>(false);
 
   // New student registration form
   const [newStudentName, setNewStudentName] = useState<string>('');
+  const [newStudentUsername, setNewStudentUsername] = useState<string>('');
   const [newSchool, setNewSchool] = useState<string>('');
   const [newGradeLevel, setNewGradeLevel] = useState<string>('Fase B (Kelas 3-4 SD)');
   const [newAvatar, setNewAvatar] = useState<string>('👦');
+  const [newStudentPassword, setNewStudentPassword] = useState<string>('');
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [registerError, setRegisterError] = useState<string>('');
 
-  // Load students and admin config on mount
+  // Load the public portal settings on mount.
   useEffect(() => {
-    loadInitialData();
+    fetchAdminPortalConfig()
+      .then((cfg) => {
+        setAdminConfig(cfg);
+        setNewSchool(cfg.schoolName);
+      })
+      .catch((error) => console.warn('Could not load portal settings from API:', error));
   }, []);
 
-  const loadInitialData = async () => {
-    setIsLoadingStudents(true);
-    try {
-      const [uData, cfg] = await Promise.all([
-        fetchAllUsersFromFirestore(),
-        fetchAdminPortalConfig(),
-      ]);
-      setStudents(uData && uData.length > 0 ? uData : [createDemoStudent()]);
-      setAdminConfig(cfg);
-      setNewSchool(cfg.schoolName || 'SD Negeri Nusantara');
-      setTeacherNameInput(cfg.teacherName || 'Bapak/Ibu Guru');
-    } catch (err) {
-      console.warn('Failed to load login initial data from Firestore:', err);
-      setStudents([createDemoStudent()]);
-    } finally {
-      setIsLoadingStudents(false);
-    }
-  };
-
-  const createDemoStudent = (): UserProgress => {
-    const todayStr = getTodayDateString();
-    return {
-      id: 'demo-student',
-      studentName: 'Budi Pratama',
-      school: 'SD Negeri Nusantara',
-      gradeLevel: 'Fase B (Kelas 3-4 SD)',
-      avatar: '👦',
-      completedPassages: [],
-      completedNumeracy: [],
-      quizScores: {},
-      earnedBadges: ['badge-first-read'],
-      totalPoints: 120,
-      streakCount: 1,
-      longestStreak: 1,
-      streakBonusPointsEarned: 20,
-      activityHistoryDates: [todayStr],
-      lastActiveDate: todayStr,
-      dailyChallenge: {
-        date: todayStr,
-        literacyCompleted: false,
-        numeracyCompleted: false,
-        bonusPointsEarned: 0,
-        allCompleted: false,
-      },
-    };
-  };
-
-  // --- STUDENT: SELECT EXISTING ACCOUNT ---
-  const handleSelectStudent = (student: UserProgress) => {
-    soundFx.playCorrect();
-    confetti({ particleCount: 40, spread: 60 });
-
-    const session: AuthSession = {
-      role: 'student',
-      studentName: student.studentName,
-      school: student.school || adminConfig.schoolName,
-      gradeLevel: student.gradeLevel || 'Fase B (Kelas 3-4 SD)',
-      avatar: student.avatar || '👦',
-      id: student.id,
-      loginTime: new Date().toISOString(),
-    };
-
-    onLoginSuccess(session, student);
-  };
-
-  const handleStudentLogin = (e: React.FormEvent) => {
+  const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const username = studentUsername.trim().toLowerCase();
-    const student = students.find(
-      (item) =>
-        item.id?.toLowerCase() === username ||
-        item.studentName.toLowerCase() === username
-    );
-    const isDemoAccount = username === 'budi' && studentPassword === '123456';
-
-    if (studentPassword !== '123456' || (!student && !isDemoAccount)) {
-      soundFx.playWrong();
-      setStudentLoginError('Username atau password salah.');
-      return;
-    }
-
+    setIsLoggingIn(true);
     setStudentLoginError('');
-    handleSelectStudent(student || createDemoStudent());
+    try {
+      const result = await login(studentUsername.trim(), studentPassword, 'student');
+      if (result.session.role !== 'student' || !result.progress) {
+        throw new Error('Akun ini bukan akun siswa.');
+      }
+      setStudentLoginError('');
+      soundFx.playCorrect();
+      confetti({ particleCount: 40, spread: 60 });
+      onLoginSuccess(result.session, result.progress);
+    } catch (error) {
+      setStudentLoginError(error instanceof Error ? error.message : 'Gagal masuk ke API.');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   // --- STUDENT: REGISTER NEW ACCOUNT ---
@@ -150,17 +81,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
       soundFx.playWrong();
       return;
     }
+    if (!/^[a-zA-Z0-9_-]{3,40}$/.test(newStudentUsername.trim())) {
+      setRegisterError('Username harus 3–40 karakter dan hanya boleh berisi huruf, angka, garis bawah, atau tanda hubung.');
+      soundFx.playWrong();
+      return;
+    }
+    if (newStudentPassword.length < 8) {
+      setRegisterError('Kata sandi harus terdiri dari minimal 8 karakter.');
+      soundFx.playWrong();
+      return;
+    }
 
     setRegisterError('');
     setIsRegistering(true);
     soundFx.playClick();
 
     const todayStr = getTodayDateString();
-    const newId = `student-${Date.now()}`;
-
     const newStudent: UserProgress = {
-      id: newId,
       studentName: newStudentName.trim(),
+      username: newStudentUsername.trim().toLowerCase(),
       school: newSchool.trim() || adminConfig.schoolName,
       gradeLevel: newGradeLevel,
       avatar: newAvatar,
@@ -186,77 +125,48 @@ export const LoginView: React.FC<LoginViewProps> = ({
     };
 
     try {
-      await saveUserToFirestore(newStudent);
+      const result = await registerStudent({
+        studentName: newStudent.studentName,
+        username: newStudent.username || '',
+        school: newStudent.school || adminConfig.schoolName,
+        gradeLevel: newStudent.gradeLevel || newGradeLevel,
+        avatar: newStudent.avatar || newAvatar,
+        password: newStudentPassword,
+        progress: newStudent,
+      });
+      if (result.session.role !== 'student' || !result.progress) {
+        throw new Error('API tidak mengembalikan akun siswa yang valid.');
+      }
       soundFx.playFanfare();
       confetti({ particleCount: 80, spread: 80 });
-
-      const session: AuthSession = {
-        role: 'student',
-        studentName: newStudent.studentName,
-        school: newStudent.school || adminConfig.schoolName,
-        gradeLevel: newStudent.gradeLevel,
-        avatar: newStudent.avatar || '👦',
-        id: newStudent.id,
-        loginTime: new Date().toISOString(),
-      };
-
-      onLoginSuccess(session, newStudent);
+      onLoginSuccess(result.session, result.progress);
     } catch (err) {
-      console.error('Failed to register student to Firestore:', err);
-      setRegisterError('Terjadi kendala saat menyimpan akun ke database.');
+      setRegisterError(err instanceof Error ? err.message : 'Pendaftaran melalui API gagal.');
     } finally {
       setIsRegistering(false);
     }
   };
 
-  // --- TEACHER: LOGIN VIA PIN ---
-  const handleTeacherLogin = (e: React.FormEvent) => {
+  // --- TEACHER: LOGIN VIA API ---
+  const handleTeacherLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (
-      teacherUsername.trim().toLowerCase() === 'guru' &&
-      teacherPinInput.trim() === adminConfig.adminPin.trim()
-    ) {
+    setIsTeacherLoggingIn(true);
+    setTeacherPinError('');
+    try {
+      const result = await login(teacherUsername.trim(), teacherPinInput, 'teacher');
+      if (result.session.role !== 'teacher') {
+        throw new Error('Akun ini bukan akun guru.');
+      }
       soundFx.playFanfare();
       confetti({ particleCount: 60, spread: 70 });
-
-      const session: AuthSession = {
-        role: 'teacher',
-        studentName: teacherNameInput.trim() || adminConfig.teacherName,
-        school: adminConfig.schoolName,
-        gradeLevel: 'Pengampu / Guru',
-        avatar: '👨‍🏫',
-        loginTime: new Date().toISOString(),
-      };
-
-      onLoginSuccess(session);
-    } else {
+      onLoginSuccess(result.session);
+    } catch (error) {
       soundFx.playWrong();
-      setTeacherPinError('Username atau password salah. Gunakan guru / 123456.');
-    }
-  };
-
-  // Seed sample demo students if list is empty
-  const handleLoadSampleStudents = async () => {
-    setIsLoadingStudents(true);
-    soundFx.playClick();
-    try {
-      await seedDemoStudentsToFirestore();
-      const uData = await fetchAllUsersFromFirestore();
-      setStudents(uData);
-      soundFx.playCorrect();
-    } catch (err) {
-      console.warn('Could not seed sample students:', err);
+      setTeacherPinError(error instanceof Error ? error.message : 'Gagal masuk ke API.');
     } finally {
-      setIsLoadingStudents(false);
+      setIsTeacherLoggingIn(false);
     }
   };
-
-  const filteredStudents = students.filter(
-    (s) =>
-      s.studentName.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
-      (s.school && s.school.toLowerCase().includes(searchStudentQuery.toLowerCase())) ||
-      (s.gradeLevel && s.gradeLevel.toLowerCase().includes(searchStudentQuery.toLowerCase()))
-  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 flex flex-col justify-between text-slate-100 relative overflow-x-hidden selection:bg-teal-500 selection:text-white">
@@ -285,7 +195,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-3 py-1 rounded-full">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="hidden sm:inline">Firebase Firestore Aktif</span>
+          <span className="hidden sm:inline">Database Aktif</span>
           <span className="sm:hidden">Online</span>
         </div>
       </header>
@@ -361,7 +271,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  🔍 Pilih Akun Terdaftar
+                  🔍 Masuk Akun Terdaftar
                 </button>
                 <button
                   onClick={() => {
@@ -389,13 +299,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     )}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Username
+                        Username atau nama terdaftar
                       </label>
                       <input
                         type="text"
                         value={studentUsername}
                         onChange={(e) => setStudentUsername(e.target.value)}
-                        placeholder="Masukkan username"
+                        placeholder="Masukkan username atau nama lengkap"
                         autoComplete="username"
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
                       />
@@ -416,9 +326,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
             
                     <button
                       type="submit"
-                      className="w-full py-3.5 px-4 rounded-2xl bg-teal-800 hover:bg-teal-900 text-white font-bold text-sm transition-all shadow-md shadow-teal-900/20 cursor-pointer"
+                      disabled={isLoggingIn}
+                      className="w-full py-3.5 px-4 rounded-2xl bg-teal-800 hover:bg-teal-900 disabled:opacity-70 disabled:cursor-wait text-white font-bold text-sm transition-all shadow-md shadow-teal-900/20 cursor-pointer"
                     >
-                      Masuk dan Mulai Belajar ➔
+                      {isLoggingIn ? (
+                        <span className="inline-flex items-center justify-center gap-2">
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Memeriksa akun...
+                        </span>
+                      ) : 'Masuk dan Mulai Belajar ➔'}
                     </button>
                   </form>
 
@@ -445,6 +361,42 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       onChange={(e) => setNewStudentName(e.target.value)}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
                       autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Username untuk masuk: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newStudentUsername}
+                      onChange={(e) => setNewStudentUsername(e.target.value)}
+                      placeholder="Contoh: farhan_2026"
+                      autoComplete="username"
+                      minLength={3}
+                      maxLength={40}
+                      pattern="[A-Za-z0-9_-]{3,40}"
+                      title="3–40 karakter: huruf, angka, garis bawah, atau tanda hubung."
+                      required
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">Username harus unik dan digunakan untuk login.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Kata sandi (minimal 8 karakter)
+                    </label>
+                    <input
+                      type="password"
+                      value={newStudentPassword}
+                      onChange={(e) => setNewStudentPassword(e.target.value)}
+                      placeholder="Buat kata sandi"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-700"
                     />
                   </div>
 
@@ -514,7 +466,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       {isRegistering ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Mendaftarkan ke Firebase...</span>
+                          <span>Mendaftarkan akun...</span>
                         </>
                       ) : (
                         <>
@@ -568,7 +520,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </label>
                   <input
                     type="password"
-                    maxLength={8}
                     value={teacherPinInput}
                     onChange={(e) => setTeacherPinInput(e.target.value)}
                     placeholder="Masukkan password"
@@ -583,31 +534,23 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     <span>🔐</span> Informasi Keamanan:
                   </div>
                   <p>
-                    Akun demo guru adalah <strong className="font-mono bg-indigo-100 px-1 py-0.5 rounded">guru</strong> / <strong className="font-mono bg-indigo-100 px-1 py-0.5 rounded">123456</strong>.
+                    Gunakan username dan kata sandi yang disiapkan administrator Laravel.
                   </p>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 px-4 rounded-2xl bg-indigo-800 hover:bg-indigo-900 text-white font-bold text-sm transition-all shadow-md shadow-indigo-900/20 flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={isTeacherLoggingIn}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-indigo-800 hover:bg-indigo-900 disabled:opacity-70 disabled:cursor-wait text-white font-bold text-sm transition-all shadow-md shadow-indigo-900/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <span>Masuk Sebagai Guru ➔</span>
+                  {isTeacherLoggingIn ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Memeriksa akun...</span>
+                    </>
+                  ) : <span>Masuk Sebagai Guru ➔</span>}
                 </button>
 
-                {onOpenAdminDirect && (
-                  <div className="text-center pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        soundFx.playClick();
-                        onOpenAdminDirect();
-                      }}
-                      className="text-xs text-indigo-700 hover:underline font-bold cursor-pointer"
-                    >
-                      Buka Panel Admin Pengelolaan Konten Langsung ⚙️
-                    </button>
-                  </div>
-                )}
               </form>
             </div>
           )}
@@ -615,14 +558,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
           {/* Card Footer */}
           <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-2">
             <span>© Lentera Indonesia · Literasi & Numerasi Berkelanjutan</span>
-            <span className="font-semibold text-slate-600">Standar Asesmen Nasional (ANBK)</span>
+            <span className="font-semibold text-slate-600">Standar Asesmen Nasional (TKA)</span>
           </div>
         </div>
       </main>
 
       {/* Page Bottom Footer */}
       <footer className="w-full py-4 text-center text-xs text-slate-500 border-t border-white/5 z-10">
-        <p>Aplikasi Media Pembelajaran Interaktif Lentera · Didukung oleh Firebase Firestore</p>
+        <p>Aplikasi Media Pembelajaran Interaktif Lentera · Didukung oleh Aplikasi Karya Anak Bangsa</p>
       </footer>
     </div>
   );

@@ -168,7 +168,7 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
               onClick={() => onNavigateToActivity('akm')}
               className="px-3.5 py-2 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl transition-colors flex items-center gap-1.5"
             >
-              <span>🏆</span> Simulasi ANBK (+100)
+              <span>🏆</span> Simulasi TKA (+100)
             </button>
           </div>
         )}
@@ -552,7 +552,7 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <div className="font-bold text-slate-800 mb-0.5">🏆 Ikuti Ujian Simulasi</div>
             <div className="text-slate-500 leading-snug">
-              Selesaikan paket ANBK 6 butir terpadu dengan kategori capaian Pusmendik (+100 poin).
+              Selesaikan paket TKA 6 butir terpadu dengan kategori capaian Pusmendik (+100 poin).
             </div>
           </div>
         </div>

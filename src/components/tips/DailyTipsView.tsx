@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { DailyTip, FALLBACK_TIPS } from '../../data/dailyTipsData';
-import { fetchDailyTip } from '../../services/aiTipsService';
+import { fetchDailyTip, fetchDailyTipCollection } from '../../services/aiTipsService';
 import { soundFx } from '../../utils/audio';
 import { ENDZI_MASCOT_IMAGE } from '../../assets/mascot';
 
@@ -20,6 +20,10 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
   const [savedTips, setSavedTips] = useState<DailyTip[]>([]);
   const [activeTab, setActiveTab] = useState<'current' | 'collection' | 'ask'>('current');
   const [customTopic, setCustomTopic] = useState<string>('');
+  const [generationError, setGenerationError] = useState<string>('');
+  const [popularTips, setPopularTips] = useState<DailyTip[]>(FALLBACK_TIPS.slice(0, 3));
+  const [isLoadingPopularTips, setIsLoadingPopularTips] = useState<boolean>(false);
+  const [popularTipsError, setPopularTipsError] = useState<string>('');
 
   // Load saved favorite tips from local storage
   useEffect(() => {
@@ -62,6 +66,7 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
     try {
       const newTip = await fetchDailyTip(cat);
       setCurrentTip(newTip);
+      setGenerationError(newTip.generationError || '');
     } catch {
       // gracefully handled
     } finally {
@@ -72,6 +77,27 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
   useEffect(() => {
     loadTip(selectedCategory);
   }, [selectedCategory]);
+
+  const loadPopularTips = async () => {
+    setIsLoadingPopularTips(true);
+    setPopularTipsError('');
+    try {
+      const tips = await fetchDailyTipCollection();
+      setPopularTips(tips);
+      if (tips.some((tip) => !tip.isAiGenerated)) {
+        setPopularTipsError(tips.find((tip) => tip.generationError)?.generationError || 'Tips cadangan ditampilkan karena DeepSeek tidak dapat membuat koleksi.');
+      }
+    } catch (error) {
+      console.error('Could not generate popular tips with DeepSeek:', error);
+      setPopularTipsError('Koleksi tips AI gagal dimuat. Tips populer cadangan ditampilkan.');
+    } finally {
+      setIsLoadingPopularTips(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadPopularTips();
+  }, []);
 
   const handleSpeak = (text: string) => {
     if (!('speechSynthesis' in window)) return;
@@ -107,34 +133,20 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
 
     soundFx.playClick();
     setIsLoading(true);
+    setGenerationError('');
     try {
-      const res = await fetch('/api/gemini/tips', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: customTopic.trim() }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.quote) {
-          const generatedTip: DailyTip = {
-            id: `custom-tip-${Date.now()}`,
-            quote: data.quote,
-            author: data.author || 'Guru Lentera AI',
-            category: 'motivasi',
-            actionTip: data.actionTip || 'Praktikkan trik ini dalam belajar!',
-            icon: data.icon || '💡',
-            isAiGenerated: true,
-          };
-          setCurrentTip(generatedTip);
-          setActiveTab('current');
-          setCustomTopic('');
-          soundFx.playCorrect();
-          confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
-        }
+      const generatedTip = await fetchDailyTip('all', customTopic.trim());
+      if (!generatedTip.isAiGenerated) {
+        setGenerationError(generatedTip.generationError || 'Tips AI belum dapat dibuat. Periksa konfigurasi server AI.');
+        return;
       }
-    } catch {
-      // fallback
+
+      setCurrentTip(generatedTip);
+      setGenerationError('');
+      setActiveTab('current');
+      setCustomTopic('');
+      soundFx.playCorrect();
+      confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
     } finally {
       setIsLoading(false);
     }
@@ -429,6 +441,11 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
 
                   {/* Quote Big Display */}
                   <div className="py-2 space-y-3">
+                    {currentTip.generationError && (
+                      <p role="status" className="text-xs leading-relaxed text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                        Tips cadangan ditampilkan. {currentTip.generationError}
+                      </p>
+                    )}
                     <span className="text-4xl text-slate-300 font-serif leading-none select-none block">
                       “
                     </span>
@@ -456,18 +473,39 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
             </div>
           </div>
 
-          {/* Quick Static Tip Suggestions Grid */}
+          {/* DeepSeek-generated popular tips */}
           <div className="space-y-3">
-            <h3 className="font-black text-slate-900 text-base">
-              Koleksi Tips & Trik Populer Lainnya
-            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-black text-slate-900 text-base">
+                  Koleksi Tips & Trik Populer Lainnya
+                </h3>
+                <p className="text-xs text-slate-500">Dibuat khusus oleh DeepSeek AI untukmu.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadPopularTips()}
+                disabled={isLoadingPopularTips}
+                className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className={isLoadingPopularTips ? 'animate-spin' : ''}>✨</span>
+                {isLoadingPopularTips ? 'Sedang membuat...' : 'Acak koleksi'}
+              </button>
+            </div>
+            {popularTipsError && (
+              <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {popularTipsError}
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {FALLBACK_TIPS.slice(0, 3).map((item) => (
+              {popularTips.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => {
                     soundFx.playClick();
                     setCurrentTip(item);
+                    setGenerationError(item.generationError || '');
+                    setActiveTab('current');
                   }}
                   className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-teal-500 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
                 >
@@ -581,6 +619,11 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
           </div>
 
           <form onSubmit={handleAskCustomTip} className="space-y-4">
+            {generationError && (
+              <p role="alert" className="text-xs leading-relaxed text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                {generationError}
+              </p>
+            )}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-700 block">
                 Topik Belajar yang Kamu Butuhkan:
@@ -625,7 +668,7 @@ export const DailyTipsView: React.FC<DailyTipsViewProps> = ({ onBack }) => {
               className="px-5 py-3 bg-gradient-to-r from-teal-700 to-indigo-700 hover:from-teal-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <span>{isLoading ? '🪄' : '✨'}</span>
-              <span>{isLoading ? 'Sedang Meracik Tips Khusus...' : 'Buat Tips dengan Gemini AI'}</span>
+              <span>{isLoading ? 'Sedang Meracik Tips Khusus...' : 'Tanyakan Tips Khusus'}</span>
             </button>
           </form>
         </div>

@@ -87,8 +87,9 @@ export interface NumeracyQuestion {
 }
 
 export interface UserProgress {
-  id?: string; // Firestore document ID
+  id?: string; // Laravel database user ID
   studentName: string;
+  username?: string;
   school?: string;
   gradeLevel?: string;
   avatar?: string;
@@ -162,9 +163,11 @@ export type UserRole = 'student' | 'teacher';
 export interface AuthSession {
   role: UserRole;
   studentName: string;
+  username?: string;
   school: string;
   gradeLevel?: string;
   avatar: string;
   id?: string;
+  token?: string;
   loginTime: string;
 }

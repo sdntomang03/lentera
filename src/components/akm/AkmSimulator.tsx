@@ -194,14 +194,14 @@ export const AkmSimulator: React.FC<AkmSimulatorProps> = ({ onAkmCompleted, onBa
     <div className="space-y-6">
       {!isSubmitted ? (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-          {/* Header Bar: ANBK Simulation Header */}
+          {/* Header Bar: TKA Simulation Header */}
           <div className="bg-slate-900 text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-lg">
-                AKM
+                TKA
               </div>
               <div>
-                <h3 className="font-bold text-base leading-tight">Simulasi ANBK / Asesmen Nasional</h3>
+                <h3 className="font-bold text-base leading-tight">Simulasi TKA / Asesmen Nasional</h3>
                 <span className="text-xs text-slate-400">Paket Terpadu: Literasi Membaca & Numerasi Terapan</span>
               </div>
             </div>

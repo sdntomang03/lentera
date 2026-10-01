@@ -236,40 +236,21 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
                 </p>
               </div>
 
-              {/* Segmented Filter */}
-              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar max-w-full">
-                <button
-                  onClick={() => setFilterLevel('all')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterLevel === 'all' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
+              <div className="flex items-center gap-2">
+                <label htmlFor="literacy-phase-filter" className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+                  Tingkat Fase:
+                </label>
+                <select
+                  id="literacy-phase-filter"
+                  value={filterLevel}
+                  onChange={(event) => setFilterLevel(event.target.value as typeof filterLevel)}
+                  className="min-w-40 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl shadow-xs focus:outline-none focus:ring-2 focus:ring-teal-700 cursor-pointer"
                 >
-                  Semua Fase
-                </button>
-                <button
-                  onClick={() => setFilterLevel('fase-a')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterLevel === 'fase-a' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Fase A (Kls 1-2)
-                </button>
-                <button
-                  onClick={() => setFilterLevel('fase-b')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterLevel === 'fase-b' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Fase B (Kls 3-4)
-                </button>
-                <button
-                  onClick={() => setFilterLevel('fase-c')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterLevel === 'fase-c' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Fase C (Kls 5-6)
-                </button>
+                  <option value="all">Semua Fase</option>
+                  <option value="fase-a">Fase A (Kls 1-2)</option>
+                  <option value="fase-b">Fase B (Kls 3-4)</option>
+                  <option value="fase-c">Fase C (Kls 5-6)</option>
+                </select>
               </div>
             </div>
           </div>

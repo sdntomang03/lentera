@@ -6,6 +6,7 @@ export interface DailyTip {
   actionTip: string;
   icon: string;
   isAiGenerated?: boolean;
+  generationError?: string;
 }
 
 export const FALLBACK_TIPS: DailyTip[] = [

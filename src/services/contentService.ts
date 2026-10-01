@@ -1,25 +1,9 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  writeBatch,
-} from 'firebase/firestore';
-import { db } from './firebase';
-import {
-  isSupportedEducationLevel,
-  isSupportedGradeLevel,
-  LiteracyPassage,
-  NumeracyQuestion,
-  UserProgress,
-} from '../types';
+import { LiteracyPassage, NumeracyQuestion, UserProgress } from '../types';
 import { LITERACY_PASSAGES } from '../data/literacyData';
 import { NUMERACY_QUESTIONS } from '../data/numeracyData';
+import { apiRequest, ApiError } from './apiClient';
 
 export interface AdminPortalConfig {
-  adminPin: string;
   schoolName: string;
   teacherName: string;
 }
@@ -86,263 +70,207 @@ export const INITIAL_DEMO_STUDENTS: UserProgress[] = [
 ];
 
 const DEFAULT_ADMIN_CONFIG: AdminPortalConfig = {
-  adminPin: '123456',
   schoolName: 'SD Negeri Nusantara',
   teacherName: 'Guru Penggerak',
 };
 
-/**
- * Fetch literacy passages from Firebase Firestore.
- * Automatically seeds default curriculum passages if the database collection is empty.
- */
-export async function fetchPassagesFromFirestore(): Promise<LiteracyPassage[]> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isLiteracyPassage(value: unknown): value is LiteracyPassage {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string'
+    && typeof value.title === 'string'
+    && ['fase-a', 'fase-b', 'fase-c'].includes(String(value.level))
+    && typeof value.levelLabel === 'string'
+    && typeof value.genre === 'string'
+    && typeof value.genreLabel === 'string'
+    && typeof value.summary === 'string'
+    && typeof value.estimatedReadTimeMinutes === 'number'
+    && typeof value.wordCount === 'number'
+    && typeof value.authorOrSource === 'string'
+    && Array.isArray(value.paragraphs)
+    && value.paragraphs.every((paragraph) => typeof paragraph === 'string')
+    && Array.isArray(value.vocabulary)
+    && value.vocabulary.every((item) => isRecord(item) && typeof item.word === 'string')
+    && Array.isArray(value.questions)
+    && value.questions.every((question) => {
+      if (!isRecord(question)
+        || typeof question.id !== 'string'
+        || typeof question.question !== 'string'
+        || typeof question.type !== 'string'
+        || typeof question.explanation !== 'string'
+        || typeof question.cognitiveLevel !== 'string'
+        || !['single-choice', 'multiple-choice', 'true-false', 'sequencing', 'short-answer'].includes(question.type)
+        || !(
+          typeof question.correctAnswers === 'string'
+          || typeof question.correctAnswers === 'number'
+          || typeof question.correctAnswers === 'boolean'
+          || Array.isArray(question.correctAnswers)
+        )) return false;
+      if (
+        (question.type === 'single-choice' || question.type === 'multiple-choice')
+        && (!Array.isArray(question.options)
+          || !question.options.every((option) => typeof option === 'string'))
+      ) return false;
+      if (question.type === 'sequencing' && !Array.isArray(question.sequenceItems)) return false;
+      return true;
+    })
+  );
+}
+
+function isNumeracyQuestion(value: unknown): value is NumeracyQuestion {
+  if (!isRecord(value) || !isRecord(value.stimulus)) return false;
+  return (
+    typeof value.id === 'string'
+    && typeof value.title === 'string'
+    && ['fase-a', 'fase-b', 'fase-c'].includes(String(value.level))
+    && typeof value.domain === 'string'
+    && typeof value.levelLabel === 'string'
+    && typeof value.domainLabel === 'string'
+    && typeof value.context === 'string'
+    && typeof value.contextLabel === 'string'
+    && typeof value.question === 'string'
+    && ['single-choice', 'multiple-choice', 'matching', 'numeric', 'true-false'].includes(String(value.type))
+    && Object.prototype.hasOwnProperty.call(value, 'correctAnswer')
+    && typeof value.cognitiveLevel === 'string'
+    && typeof value.hint === 'string'
+    && typeof value.stimulus.text === 'string'
+    && Array.isArray(value.stepByStepSolution)
+  );
+}
+
+async function saveContent(
+  type: 'passages' | 'questions',
+  id: string,
+  data: LiteracyPassage | NumeracyQuestion,
+): Promise<void> {
+  const path = `/content/${type}/${encodeURIComponent(id)}`;
   try {
-    const colRef = collection(db, 'passages');
-    const snapshot = await getDocs(colRef);
-
-    if (snapshot.empty) {
-      // Seed default passages into Firebase
-      await seedDefaultPassages();
-      return LITERACY_PASSAGES;
-    }
-
-    const items: LiteracyPassage[] = [];
-    snapshot.forEach((docSnap: any) => {
-      items.push({ ...(docSnap.data() as LiteracyPassage), id: docSnap.id });
-    });
-
-    return items.filter((item) => isSupportedEducationLevel(item.level));
+    await apiRequest(path, { method: 'PUT', body: JSON.stringify({ data }) });
   } catch (error) {
-    console.warn('Firestore fetchPassages error, fallback to local data:', error);
-    return LITERACY_PASSAGES;
+    if (!(error instanceof ApiError) || error.status !== 404) throw error;
+    await apiRequest(`/content/${type}`, { method: 'POST', body: JSON.stringify({ data }) });
   }
 }
 
-/**
- * Save or update a literacy passage in Firestore.
- */
-export async function savePassageToFirestore(passage: LiteracyPassage): Promise<void> {
-  const docRef = doc(db, 'passages', passage.id);
-  await setDoc(docRef, passage, { merge: true });
-}
-
-/**
- * Delete a literacy passage from Firestore.
- */
-export async function deletePassageFromFirestore(passageId: string): Promise<void> {
-  const docRef = doc(db, 'passages', passageId);
-  await deleteDoc(docRef);
-}
-
-/**
- * Fetch numeracy questions from Firebase Firestore.
- * Automatically seeds default numeracy questions if collection is empty.
- */
-export async function fetchNumeracyFromFirestore(): Promise<NumeracyQuestion[]> {
-  try {
-    const colRef = collection(db, 'questions');
-    const snapshot = await getDocs(colRef);
-
-    if (snapshot.empty) {
-      // Seed default numeracy into Firebase
-      await seedDefaultNumeracy();
-      return NUMERACY_QUESTIONS;
-    }
-
-    const items: NumeracyQuestion[] = [];
-    snapshot.forEach((docSnap: any) => {
-      items.push({ ...(docSnap.data() as NumeracyQuestion), id: docSnap.id });
-    });
-
-    return items.filter((item) => isSupportedEducationLevel(item.level));
-  } catch (error) {
-    console.warn('Firestore fetchNumeracy error, fallback to local data:', error);
-    return NUMERACY_QUESTIONS;
+export async function fetchPassagesFromApi(): Promise<LiteracyPassage[]> {
+  const response = await apiRequest<{ data: unknown }>('/content/passages');
+  if (!Array.isArray(response.data)) throw new Error('Respons API bacaan tidak valid.');
+  const passages = response.data.filter(isLiteracyPassage);
+  if (passages.length !== response.data.length) {
+    console.warn('Some malformed literacy content from the Database was ignored.');
   }
+  return passages;
 }
 
-/**
- * Save or update a numeracy question in Firestore.
- */
-export async function saveNumeracyToFirestore(question: NumeracyQuestion): Promise<void> {
-  const docRef = doc(db, 'questions', question.id);
-  await setDoc(docRef, question, { merge: true });
+export async function savePassageToApi(passage: LiteracyPassage): Promise<void> {
+  await saveContent('passages', passage.id, passage);
 }
 
-/**
- * Delete a numeracy question from Firestore.
- */
-export async function deleteNumeracyFromFirestore(questionId: string): Promise<void> {
-  const docRef = doc(db, 'questions', questionId);
-  await deleteDoc(docRef);
+export async function deletePassageFromApi(passageId: string): Promise<void> {
+  await apiRequest(`/content/passages/${encodeURIComponent(passageId)}`, { method: 'DELETE' });
 }
 
-/**
- * Seed all default literacy passages to Firestore.
- */
+export async function fetchNumeracyFromApi(): Promise<NumeracyQuestion[]> {
+  const response = await apiRequest<{ data: unknown }>('/content/questions');
+  if (!Array.isArray(response.data)) throw new Error('Respons API numerasi tidak valid.');
+  const questions = response.data.filter(isNumeracyQuestion);
+  if (questions.length !== response.data.length) {
+    console.warn('Some malformed numeracy content from the Database was ignored.');
+  }
+  return questions;
+}
+
+export async function saveNumeracyToApi(question: NumeracyQuestion): Promise<void> {
+  await saveContent('questions', question.id, question);
+}
+
+export async function deleteNumeracyFromApi(questionId: string): Promise<void> {
+  await apiRequest(`/content/questions/${encodeURIComponent(questionId)}`, { method: 'DELETE' });
+}
+
 export async function seedDefaultPassages(): Promise<void> {
-  try {
-    const batch = writeBatch(db);
-    LITERACY_PASSAGES.forEach((item) => {
-      const docRef = doc(db, 'passages', item.id);
-      batch.set(docRef, item, { merge: true });
-    });
-    await batch.commit();
-  } catch (err) {
-    console.warn('Failed to seed default passages:', err);
-  }
+  await Promise.all(LITERACY_PASSAGES.map((item) => savePassageToApi(item)));
 }
 
-/**
- * Seed all default numeracy questions to Firestore.
- */
 export async function seedDefaultNumeracy(): Promise<void> {
-  try {
-    const batch = writeBatch(db);
-    NUMERACY_QUESTIONS.forEach((item) => {
-      const docRef = doc(db, 'questions', item.id);
-      batch.set(docRef, item, { merge: true });
-    });
-    await batch.commit();
-  } catch (err) {
-    console.warn('Failed to seed default numeracy:', err);
-  }
+  await Promise.all(NUMERACY_QUESTIONS.map((item) => saveNumeracyToApi(item)));
 }
 
-/**
- * Seed specifically Fase C (Kelas 5 - 6 SD) passages and numeracy questions to Firestore.
- */
-export async function seedFaseCContentToFirestore(): Promise<{ passagesCount: number; numeracyCount: number }> {
-  try {
-    const batch = writeBatch(db);
-    const faseCPassages = LITERACY_PASSAGES.filter((p) => p.level === 'fase-c');
-    const faseCNumeracy = NUMERACY_QUESTIONS.filter((q) => q.level === 'fase-c');
-
-    faseCPassages.forEach((item) => {
-      const docRef = doc(db, 'passages', item.id);
-      batch.set(docRef, item, { merge: true });
-    });
-
-    faseCNumeracy.forEach((item) => {
-      const docRef = doc(db, 'questions', item.id);
-      batch.set(docRef, item, { merge: true });
-    });
-
-    await batch.commit();
-    return { passagesCount: faseCPassages.length, numeracyCount: faseCNumeracy.length };
-  } catch (err) {
-    console.warn('Failed to seed Fase C content to Firestore:', err);
-    throw err;
-  }
+export async function seedFaseCContentToApi(): Promise<{ passagesCount: number; numeracyCount: number }> {
+  const passages = LITERACY_PASSAGES.filter((item) => item.level === 'fase-c');
+  const questions = NUMERACY_QUESTIONS.filter((item) => item.level === 'fase-c');
+  await Promise.all([
+    ...passages.map((item) => savePassageToApi(item)),
+    ...questions.map((item) => saveNumeracyToApi(item)),
+  ]);
+  return { passagesCount: passages.length, numeracyCount: questions.length };
 }
 
-/**
- * Fetch admin credentials and portal settings.
- */
 export async function fetchAdminPortalConfig(): Promise<AdminPortalConfig> {
-  try {
-    const docRef = doc(db, 'admin_settings', 'config');
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return { ...DEFAULT_ADMIN_CONFIG, ...snap.data() } as AdminPortalConfig;
-    }
-    // Set initial config
-    await setDoc(docRef, DEFAULT_ADMIN_CONFIG);
-    return DEFAULT_ADMIN_CONFIG;
-  } catch (error) {
-    console.warn('Failed to fetch admin portal config, using default:', error);
-    return DEFAULT_ADMIN_CONFIG;
-  }
+  const response = await apiRequest<{ data: AdminPortalConfig }>('/settings');
+  return { ...DEFAULT_ADMIN_CONFIG, ...response.data };
 }
 
-/**
- * Save admin credentials and portal settings.
- */
 export async function saveAdminPortalConfig(config: AdminPortalConfig): Promise<void> {
-  const docRef = doc(db, 'admin_settings', 'config');
-  await setDoc(docRef, config, { merge: true });
+  await apiRequest('/settings', { method: 'PUT', body: JSON.stringify(config) });
 }
 
-/**
- * Fetch all student user profiles from Firestore.
- * Automatically seeds demo students if collection is empty.
- */
-export async function fetchAllUsersFromFirestore(): Promise<UserProgress[]> {
-  try {
-    const colRef = collection(db, 'users');
-    const snapshot = await getDocs(colRef);
+export async function fetchAllUsersFromApi(): Promise<UserProgress[]> {
+  const response = await apiRequest<{ data: unknown }>('/admin/students');
+  if (!Array.isArray(response.data)) throw new Error('Respons API daftar siswa tidak valid.');
+  return response.data;
+}
 
-    if (snapshot.empty) {
-      await seedDemoStudentsToFirestore();
-      return INITIAL_DEMO_STUDENTS;
-    }
-
-    const items: UserProgress[] = [];
-    snapshot.forEach((docSnap: any) => {
-      items.push({ ...(docSnap.data() as UserProgress), id: docSnap.id });
+export async function saveUserToApi(user: UserProgress): Promise<string> {
+  const session = typeof window === 'undefined'
+    ? null
+    : JSON.parse(window.localStorage.getItem('lentera_auth_session_v1') || 'null') as
+        { role?: string; id?: string } | null;
+  if (session?.role === 'student' && user.id && user.id === session.id) {
+    await apiRequest('/me/progress', { method: 'PUT', body: JSON.stringify({ progress: user }) });
+    return user.id;
+  }
+  if (session?.role === 'teacher' && user.id) {
+    await apiRequest(`/admin/students/${encodeURIComponent(user.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        studentName: user.studentName,
+        username: user.username,
+        school: user.school,
+        gradeLevel: user.gradeLevel,
+        avatar: user.avatar,
+        progress: user,
+      }),
     });
-
-    return items.filter((item) => isSupportedGradeLevel(item.gradeLevel));
-  } catch (error) {
-    console.warn('Firestore fetchAllUsers error, fallback to demo data:', error);
-    return INITIAL_DEMO_STUDENTS;
+    return user.id;
   }
+  throw new Error('Tidak memiliki sesi yang berhak menyimpan progres siswa ini.');
 }
 
-/**
- * Save or update student profile in Firestore.
- */
-export async function saveUserToFirestore(user: UserProgress): Promise<string> {
-  const userId =
-    user.id ||
-    `student-${user.studentName.toLowerCase().replace(/[^a-z0-9]/g, '-') || Date.now()}`;
-  const docRef = doc(db, 'users', userId);
-  const dataToSave = {
-    ...user,
-    id: userId,
-    updatedAt: new Date().toISOString(),
-  };
-  await setDoc(docRef, dataToSave, { merge: true });
-  return userId;
+export async function createStudentFromAdmin(
+  user: UserProgress,
+  password: string,
+): Promise<string> {
+  if (!user.username) throw new Error('Username siswa wajib diisi.');
+  const response = await apiRequest<{ data: { id: string } }>('/admin/students', {
+    method: 'POST',
+    body: JSON.stringify({
+      studentName: user.studentName,
+      username: user.username,
+      school: user.school,
+      gradeLevel: user.gradeLevel,
+      avatar: user.avatar,
+      password,
+      progress: user,
+    }),
+  });
+  return response.data.id;
 }
 
-/**
- * Delete a student profile from Firestore.
- */
-export async function deleteUserFromFirestore(userId: string, studentName?: string): Promise<void> {
-  try {
-    if (userId) {
-      const docRef = doc(db, 'users', userId);
-      await deleteDoc(docRef);
-    }
-    if (studentName) {
-      const slug = `student-${studentName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-      if (slug !== userId) {
-        try {
-          await deleteDoc(doc(db, 'users', slug));
-        } catch {
-          // Ignore if slug doc does not exist
-        }
-      }
-    }
-  } catch (error) {
-    console.warn('Error deleting user from Firestore:', error);
-    throw error;
-  }
-}
-
-/**
- * Seed initial demo classroom students to Firestore.
- */
-export async function seedDemoStudentsToFirestore(): Promise<void> {
-  try {
-    const batch = writeBatch(db);
-    INITIAL_DEMO_STUDENTS.forEach((student) => {
-      const docRef = doc(db, 'users', student.id!);
-      batch.set(docRef, student, { merge: true });
-    });
-    await batch.commit();
-  } catch (err) {
-    console.warn('Failed to seed demo students to Firestore:', err);
-  }
+export async function deleteUserFromApi(userId: string, _studentName?: string): Promise<void> {
+  await apiRequest(`/admin/students/${encodeURIComponent(userId)}`, { method: 'DELETE' });
 }

@@ -4,13 +4,14 @@ import { ChatMessage, sendMessageToEndzi } from '../../services/chatService';
 import { soundFx } from '../../utils/audio';
 
 interface EndziChatBotProps {
+  userId?: string;
   studentName?: string;
   currentNav: string;
   isOpen?: boolean;
   onToggleOpen?: () => void;
 }
 
-const STORAGE_CHAT_KEY = 'lentera_endzi_chat_history_v3';
+const STORAGE_CHAT_KEY = 'lentera_endzi_chat_history_v4';
 const STORAGE_POSITION_KEY = 'lentera_endzi_fab_position_v1';
 
 interface MascotPosition {
@@ -19,11 +20,15 @@ interface MascotPosition {
 }
 
 export const EndziChatBot: React.FC<EndziChatBotProps> = ({
+  userId,
   studentName = 'Siswa Lentera',
   currentNav,
   isOpen: controlledIsOpen,
   onToggleOpen,
 }) => {
+  const chatStorageKey = `${STORAGE_CHAT_KEY}_${encodeURIComponent(
+    userId || studentName.trim().toLocaleLowerCase(),
+  )}`;
   const [internalIsOpen, setInternalIsOpen] = useState<boolean>(false);
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
 
@@ -200,7 +205,7 @@ Apa hal atau pertanyaan yang ingin kita bahas bersama hari ini? Tuliskan saja pe
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(STORAGE_CHAT_KEY);
+        const saved = localStorage.getItem(chatStorageKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -230,11 +235,11 @@ Apa hal atau pertanyaan yang ingin kita bahas bersama hari ini? Tuliskan saja pe
   // Save chat history
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(messages.slice(-20)));
+      localStorage.setItem(chatStorageKey, JSON.stringify(messages.slice(-20)));
     } catch {
       // ignore
     }
-  }, [messages]);
+  }, [chatStorageKey, messages]);
 
   // Contextual teaser updates
   useEffect(() => {

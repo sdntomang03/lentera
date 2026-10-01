@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { LiteracyView } from './components/literacy/LiteracyView';
 import { NumeracyView } from './components/numeracy/NumeracyView';
@@ -24,10 +24,12 @@ import {
   recordDailyChallengeCompletion,
   getCurrentDailyChallenge,
 } from './utils/dailyChallenge';
+import { logout as logoutFromApi } from './services/authService';
+import { apiRequest, ApiError } from './services/apiClient';
 import {
-  fetchPassagesFromFirestore,
-  fetchNumeracyFromFirestore,
-  saveUserToFirestore,
+  fetchPassagesFromApi,
+  fetchNumeracyFromApi,
+  saveUserToApi,
 } from './services/contentService';
 
 type ActiveNav =
@@ -45,7 +47,7 @@ const NAV_LABELS: Record<ActiveNav, string> = {
   numerasi: 'Numerasi AKM',
   tips: 'Tips Harian Belajar',
   manipulatif: 'Lab Manipulatif',
-  akm: 'Simulasi ANBK / AKM',
+  akm: 'Simulasi TKA',
   leaderboard: 'Papan Peringkat Global',
   lkpd: 'LKPD Cetak & Asesmen',
   prestasi: 'Profil & Prestasi',
@@ -85,7 +87,8 @@ export default function App() {
       try {
         const saved = localStorage.getItem(AUTH_SESSION_KEY);
         if (saved) {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved) as AuthSession;
+          return parsed.token ? parsed : null;
         }
       } catch {
         // ignore
@@ -119,6 +122,10 @@ export default function App() {
     }
     return defaultProgress;
   });
+  const [isRestoringProgress, setIsRestoringProgress] = useState(
+    () => session?.role === 'student' && Boolean(session.token),
+  );
+  const progressSyncQueue = useRef<Promise<void>>(Promise.resolve());
 
   // Streak celebration modal state
   const [streakModalData, setStreakModalData] = useState<{
@@ -160,30 +167,58 @@ export default function App() {
   const [hasActiveExercise, setHasActiveExercise] = useState<boolean>(false);
 
   // Admin & Database Content state
-  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [passages, setPassages] = useState<LiteracyPassage[]>(LITERACY_PASSAGES);
   const [numeracyQuestions, setNumeracyQuestions] = useState<NumeracyQuestion[]>(NUMERACY_QUESTIONS);
 
-  // Fetch from Firebase Firestore on startup
-  const loadFirestoreContent = async () => {
+  // Fetch from Database on startup
+  const loadApiContent = async () => {
     try {
       const [pData, nData] = await Promise.all([
-        fetchPassagesFromFirestore(),
-        fetchNumeracyFromFirestore(),
+        fetchPassagesFromApi(),
+        fetchNumeracyFromApi(),
       ]);
       if (pData && pData.length > 0) setPassages(pData);
       if (nData && nData.length > 0) setNumeracyQuestions(nData);
     } catch (err) {
-      console.warn('Could not load content from Firestore, using local fallback:', err);
+      console.warn('Could not load content from Database, using local fallback:', err);
     }
   };
 
   useEffect(() => {
-    loadFirestoreContent();
+    loadApiContent();
   }, []);
 
+  useEffect(() => {
+    if (session?.role !== 'student' || !session.token || !isRestoringProgress) return;
+    let isActive = true;
+    apiRequest<{ data: UserProgress }>('/me/progress')
+      .then(({ data }) => {
+        if (!isActive) return;
+        const restored = { ...defaultProgress, ...data };
+        setProgress({
+          ...restored,
+          dailyChallenge: getCurrentDailyChallenge(restored),
+        });
+        setIsRestoringProgress(false);
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        if (error instanceof ApiError && error.status === 401) {
+          localStorage.removeItem(AUTH_SESSION_KEY);
+          setSession(null);
+          setIsRestoringProgress(false);
+          return;
+        }
+        console.warn('Could not restore student progress from Database:', error);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [session?.id, isRestoringProgress]);
+
   const handleLoginSuccess = (nextSession: AuthSession, progressData?: UserProgress) => {
+    setIsRestoringProgress(false);
     setSession(nextSession);
     if (progressData) {
       setProgress({
@@ -207,6 +242,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    void logoutFromApi().catch((error) => {
+      console.warn('Could not revoke the Database session:', error);
+    });
     setSession(null);
     setActiveNav('literasi');
     setNavHistory([]);
@@ -267,14 +305,25 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-      // Autosave active student progress to Firebase Firestore collection 'users'
-      saveUserToFirestore(progress).catch((err) => {
-        console.warn('Auto-sync to Firestore user collection notice:', err);
-      });
+      if (
+        session?.role === 'student'
+        && progress.id
+        && !isRestoringProgress
+      ) {
+        const progressSnapshot = progress;
+        progressSyncQueue.current = progressSyncQueue.current
+          .catch(() => undefined)
+          .then(async () => {
+            await saveUserToApi(progressSnapshot);
+          })
+          .catch((err) => {
+            console.warn('Could not sync student progress to Database:', err);
+          });
+      }
     } catch {
       // ignore
     }
-  }, [progress]);
+  }, [progress, session?.id, session?.role, isRestoringProgress]);
 
   const processStreakOnActivity = (baseProgress: UserProgress): UserProgress => {
     const streakRes = recordActivityStreak(baseProgress);
@@ -521,17 +570,17 @@ export default function App() {
     return (
       <LoginView
         onLoginSuccess={handleLoginSuccess}
-        onOpenAdminDirect={() => {
-          handleLoginSuccess({
-            role: 'teacher',
-            studentName: 'Guru Penggerak',
-            school: 'SD Negeri Nusantara',
-            gradeLevel: 'Pengampu / Guru',
-            avatar: '👨‍🏫',
-            loginTime: new Date().toISOString(),
-          });
-          setIsAdminOpen(true);
-        }}
+      />
+    );
+  }
+
+  if (session.role === 'teacher') {
+    return (
+      <AdminPanel
+        onContentUpdated={loadApiContent}
+        onClose={handleLogout}
+        isTeacher
+        teacherWorkspace
       />
     );
   }
@@ -543,7 +592,6 @@ export default function App() {
         activeNav={activeNav}
         onSelectNav={handleNavSelect}
         progress={progress}
-        onOpenAdmin={() => setIsAdminOpen(true)}
         onLogout={handleLogout}
         session={session}
         onToggleChat={() => setIsChatOpen((prev) => !prev)}
@@ -675,18 +723,6 @@ export default function App() {
         message={challengeModalData.message}
       />
 
-      {/* Admin Guru Panel (Firebase Firestore Content & User Management) */}
-      {isAdminOpen && (
-        <AdminPanel
-          onContentUpdated={loadFirestoreContent}
-          onClose={() => setIsAdminOpen(false)}
-          currentStudentName={progress.studentName}
-          onSelectStudentProfile={(selectedStudent) => {
-            setProgress(selectedStudent);
-          }}
-        />
-      )}
-
       {/* Footer (Hidden on Print) */}
       <footer className="no-print bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 space-y-1">
@@ -701,7 +737,8 @@ export default function App() {
 
       {/* Maskot AI Burung Enggang 'Endzi' Chatbot Widget */}
       <EndziChatBot
-        studentName={progress.studentName}
+        userId={session.id}
+        studentName={session.studentName || progress.studentName}
         currentNav={activeNav}
         isOpen={isChatOpen}
         onToggleOpen={() => setIsChatOpen((prev) => !prev)}
