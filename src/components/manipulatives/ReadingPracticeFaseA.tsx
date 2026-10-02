@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ReadingPracticeItem } from '../../types';
 import { soundFx, SpeechReader } from '../../utils/audio';
 
 type StageKey = 'suku-kata' | 'kata' | 'kalimat';
+const EMPTY_ITEMS: ReadingPracticeItem[] = [];
+
+function shuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled;
+}
 
 const DEFAULT_ITEMS: ReadingPracticeItem[] = [
   ...[
@@ -41,7 +51,7 @@ const STAGES: { key: StageKey; label: string; icon: string; desc: string }[] = [
   { key: 'kalimat', label: 'Kalimat Pendek', icon: '📝', desc: 'Dengar & baca kalimat sederhana' },
 ];
 
-export const ReadingPracticeFaseA: React.FC<{ items?: ReadingPracticeItem[] }> = ({ items = [] }) => {
+export const ReadingPracticeFaseA: React.FC<{ items?: ReadingPracticeItem[] }> = ({ items = EMPTY_ITEMS }) => {
   const [stage, setStage] = useState<StageKey>('suku-kata');
   const [sukuIndex, setSukuIndex] = useState<number>(0);
   const [kataIndex, setKataIndex] = useState<number>(0);
@@ -50,9 +60,26 @@ export const ReadingPracticeFaseA: React.FC<{ items?: ReadingPracticeItem[] }> =
   const [isCorrectFeedback, setIsCorrectFeedback] = useState<boolean | null>(null);
   const [score, setScore] = useState<number>(0);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  const sukuItems = [...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'syllable');
-  const kataItems = [...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'word-image');
-  const kalimatItems = [...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'sentence');
+  const sukuItems = useMemo(
+    () => shuffle([...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'syllable')),
+    [items],
+  );
+  const kataItems = useMemo(
+    () => shuffle([...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'word-image')),
+    [items],
+  );
+  const kalimatItems = useMemo(
+    () => shuffle([...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'sentence')),
+    [items],
+  );
+
+  useEffect(() => {
+    setSukuIndex(0);
+    setKataIndex(0);
+    setKalimatIndex(0);
+    setSelectedOption(null);
+    setIsCorrectFeedback(null);
+  }, [items]);
 
   const speak = (text: string) => {
     setIsSpeaking(true);

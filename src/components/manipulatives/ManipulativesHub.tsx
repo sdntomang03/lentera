@@ -9,6 +9,8 @@ import { WordScrambleGame } from './WordScrambleGame';
 import { CodingAdventureGame } from './CodingAdventureGame';
 import { MathDuelGame } from './MathDuelGame';
 import { TangramDuelGame } from './TangramDuelGame';
+import { AlphabetSpellingLab } from './AlphabetSpellingLab';
+import { MathOperationsPractice } from './MathOperationsPractice';
 import { soundFx } from '../../utils/audio';
 import { ReadingPracticeItem } from '../../types';
 
@@ -19,10 +21,12 @@ interface ManipulativesHubProps {
 
 export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack, readingPracticeItems }) => {
   const [activeTab, setActiveTab] = useState<
-    'fraction' | 'numberline' | 'balance' | 'clock' | 'baseten' | 'reading' | 'wordgame' | 'coding' | 'duel' | 'tangram'
+    'fraction' | 'numberline' | 'balance' | 'clock' | 'baseten' | 'reading' | 'alphabet' | 'operations' | 'wordgame' | 'coding' | 'duel' | 'tangram'
   >('fraction');
 
   const tools = [
+    { id: 'alphabet', name: 'Lab Huruf & Mengeja', icon: '🔠', desc: 'Kenali huruf, eja kata, dan gunakan layar penuh' },
+    { id: 'operations', name: 'Game Hitung Bersusun', icon: '🧮', desc: 'Latihan tambah, kurang, kali, bagi dengan panduan langkah' },
     { id: 'fraction', name: 'Laboratorium Pecahan', icon: '🍕', desc: 'Arsir kue, pembilang, penyebut & senilai' },
     { id: 'numberline', name: 'Garis Bilangan Katak', icon: '🐸', desc: 'Operasi maju & mundur penjumlahan bilangan' },
     { id: 'balance', name: 'Neraca Kesetaraan', icon: '⚖️', desc: 'Keseimbangan aljabar & mencari nilai X' },
@@ -53,7 +57,7 @@ export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack, read
               <span className="text-teal-700 font-extrabold text-base group-hover:-translate-x-0.5 transition-transform">←</span>
               <span>Kembali</span>
             </button>
-            <span className="text-xs text-slate-400 font-medium hidden sm:inline">10 Alat Visual Interaktif</span>
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">12 Alat Visual Interaktif</span>
           </div>
         )}
 
@@ -104,6 +108,8 @@ export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack, read
         {activeTab === 'clock' && <InteractiveClock />}
         {activeTab === 'baseten' && <BaseTenBlocks />}
         {activeTab === 'reading' && <ReadingPracticeFaseA items={readingPracticeItems} />}
+        {activeTab === 'alphabet' && <AlphabetSpellingLab />}
+        {activeTab === 'operations' && <MathOperationsPractice />}
         {activeTab === 'wordgame' && <WordScrambleGame />}
         {activeTab === 'coding' && <CodingAdventureGame />}
         {activeTab === 'duel' && <MathDuelGame />}
