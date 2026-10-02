@@ -67,7 +67,7 @@ const defaultProgress: UserProgress = {
   completedNumeracy: [],
   quizScores: {},
   earnedBadges: ['badge-first-read'],
-  totalPoints: 120,
+  totalPoints: 0,
   streakCount: 1,
   longestStreak: 1,
   streakBonusPointsEarned: 20,
