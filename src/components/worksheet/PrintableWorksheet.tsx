@@ -168,7 +168,7 @@ export const PrintableWorksheet: React.FC<PrintableWorksheetProps> = ({ onBack }
             LEMBAR KERJA PESERTA DIDIK (LKPD) - KURIKULUM MERDEKA
           </h3>
           <p className="text-xs text-slate-600 mt-1">
-            Program Penguatan Literasi & Numerasi Berbasis Asesmen Kompetensi Minimum (AKM)
+            Program Penguatan Literasi & Numerasi
           </p>
         </div>
 

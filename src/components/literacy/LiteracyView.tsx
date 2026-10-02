@@ -523,7 +523,7 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
                   <div>
-                    <h3 className="font-bold text-slate-900">Kuis Pemahaman Teks (AKM)</h3>
+                    <h3 className="font-bold text-slate-900">Kuis Pemahaman Teks</h3>
                     <p className="text-xs text-slate-500">Uji kemampuan menemukan info & evaluasi</p>
                   </div>
                   {quizScore && (

@@ -746,9 +746,7 @@ export default function App() {
           <p className="font-semibold text-slate-700">
             Lentera · Media Pembelajaran Literasi & Numerasi Terpadu
           </p>
-          <p>
-            Sesuai Standar Asesmen Kompetensi Minimum (AKM) & Kurikulum Merdeka Kemendikbudristek RI
-          </p>
+
           <button
             type="button"
             onClick={() => setIsAboutOpen(true)}
