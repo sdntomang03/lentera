@@ -4,7 +4,10 @@ import { soundFx } from '../../utils/audio';
 type Operation = 'addition' | 'subtraction' | 'multiplication' | 'division';
 type GamePhase = 'setup' | 'playing' | 'finished';
 type DigitSlot = { place: string; extra: string };
-type DivisionWorkRow = { value: string; endIndex: number; negative?: boolean };
+type DivisionStep = { partial: string; quotientDigit: number; product: number; remainder: number; endIndex: number };
+type BorrowAdjustment = { column: number; original: number; adjusted: number; change: string };
+type CarryAdjustment = { column: number; value: number };
+type MultiplicationPartial = { digits: string };
 
 const OPERATIONS: { id: Operation; label: string; symbol: string }[] = [
   { id: 'addition', label: 'Penjumlahan', symbol: '+' },
@@ -14,6 +17,7 @@ const OPERATIONS: { id: Operation; label: string; symbol: string }[] = [
 ];
 const PLACE_NAMES = ['satuan', 'puluhan', 'ratusan', 'ribuan', 'puluh ribuan', 'ratus ribuan', 'jutaan', 'puluh jutaan'];
 const ROUND_COUNT = 10;
+const DIGIT_CELL_CLASS = 'h-8 w-8 border border-sky-200 bg-white align-middle';
 
 interface Problem {
   first: number;
@@ -21,6 +25,10 @@ interface Problem {
   answer: number;
   operation: Operation;
   hidden: number[];
+  hiddenPartialCells: string[];
+  borrowAdjustments: BorrowAdjustment[];
+  carryAdjustments: CarryAdjustment[];
+  divisionSteps: DivisionStep[];
   steps: DigitSlot[];
 }
 
@@ -28,19 +36,42 @@ const randomInteger = (min: number, max: number) => Math.floor(Math.random() * (
 const randomNDigitNumber = (digits: number) =>
   randomInteger(10 ** (digits - 1), 10 ** digits - 1);
 
-function createProblem(operation: Operation, firstDigits: number, secondDigits: number): Problem {
+function createProblem(operation: Operation, firstDigits: number, secondDigits: number, includeCarryOrBorrow: boolean): Problem {
   let first: number;
   let second: number;
   let answer: number;
 
   if (operation === 'addition') {
-    first = randomNDigitNumber(firstDigits);
-    second = randomNDigitNumber(secondDigits);
+    let attempts = 0;
+    do {
+      first = randomNDigitNumber(firstDigits);
+      second = randomNDigitNumber(secondDigits);
+      attempts++;
+    } while (hasAdditionCarry(first, second) !== includeCarryOrBorrow && attempts < 100);
+    if (hasAdditionCarry(first, second) !== includeCarryOrBorrow) {
+      first = Number('1'.repeat(firstDigits));
+      second = Number((includeCarryOrBorrow ? '9' : '2').repeat(secondDigits));
+    }
     answer = first + second;
   } else if (operation === 'subtraction') {
-    first = randomNDigitNumber(firstDigits);
-    second = randomNDigitNumber(secondDigits);
-    if (first < second) [first, second] = [second, first];
+    let attempts = 0;
+    do {
+      first = randomNDigitNumber(firstDigits);
+      second = randomNDigitNumber(secondDigits);
+      if (first < second) [first, second] = [second, first];
+      attempts++;
+    } while (hasSubtractionBorrow(first, second) !== includeCarryOrBorrow && attempts < 100);
+    if (hasSubtractionBorrow(first, second) !== includeCarryOrBorrow) {
+      if (includeCarryOrBorrow && firstDigits > 1) {
+        first = 2 * 10 ** (firstDigits - 1);
+        second = secondDigits < firstDigits
+          ? Number('1'.repeat(secondDigits))
+          : first - 9;
+      } else {
+        first = Number('8'.repeat(firstDigits));
+        second = Number('1'.repeat(secondDigits));
+      }
+    }
     answer = first - second;
   } else if (operation === 'multiplication') {
     first = randomNDigitNumber(firstDigits);
@@ -57,12 +88,88 @@ function createProblem(operation: Operation, firstDigits: number, secondDigits: 
   }
 
   const steps = createSteps(operation, first, second);
+  const borrowAdjustments = operation === 'subtraction' ? getBorrowAdjustments(first, second) : [];
+  const carryAdjustments = operation === 'addition' ? getAdditionCarries(first, second, Math.max(String(first).length, String(second).length, String(answer).length)) : [];
+  const divisionSteps = operation === 'division' ? getDivisionSteps(first, second) : [];
   const answerLength = String(answer).length;
-  const hiddenCount = Math.min(answerLength, Math.max(1, Math.ceil(answerLength / 2)));
+  const hiddenCount = operation === 'division' ? answerLength : Math.min(answerLength, Math.max(1, Math.ceil(answerLength / 2)));
   const hidden = new Set<number>();
-  while (hidden.size < hiddenCount) hidden.add(randomInteger(0, answerLength - 1));
+  if (operation === 'division') {
+    for (let index = 0; index < answerLength; index++) hidden.add(index);
+  } else {
+    while (hidden.size < hiddenCount) hidden.add(randomInteger(0, answerLength - 1));
+  }
 
-  return { first, second, answer, operation, hidden: [...hidden], steps };
+  const hiddenPartialCells = operation === 'multiplication'
+    ? getMultiplicationPartials(first, second).flatMap(({ digits }, rowIndex) => {
+      const columnCount = Math.max(String(first).length, String(second).length, String(answer).length);
+      const startColumn = columnCount - digits.length;
+      const candidateColumns = Array.from({ length: digits.length }, (_, digitIndex) => startColumn + digitIndex);
+      const hideCount = Math.max(1, Math.floor(digits.length / 2));
+      const selectedColumns = new Set<number>();
+      while (selectedColumns.size < hideCount) {
+        selectedColumns.add(candidateColumns[randomInteger(0, candidateColumns.length - 1)]);
+      }
+      return [...selectedColumns].map((column) => `${rowIndex}-${column}`);
+    })
+    : [];
+
+  return { first, second, answer, operation, hidden: [...hidden], hiddenPartialCells, borrowAdjustments, carryAdjustments, divisionSteps, steps };
+}
+
+function hasAdditionCarry(first: number, second: number): boolean {
+  const a = String(first).split('').reverse().map(Number);
+  const b = String(second).split('').reverse().map(Number);
+  let carry = 0;
+  for (let index = 0; index < Math.max(a.length, b.length); index++) {
+    const total = (a[index] ?? 0) + (b[index] ?? 0) + carry;
+    carry = Math.floor(total / 10);
+    if (carry) return true;
+  }
+  return false;
+}
+
+function hasSubtractionBorrow(first: number, second: number): boolean {
+  const a = String(first).split('').reverse().map(Number);
+  const b = String(second).split('').reverse().map(Number);
+  return a.some((digit, index) => digit < (b[index] ?? 0));
+}
+
+function getAdditionCarries(first: number, second: number, columnCount: number): CarryAdjustment[] {
+  const a = String(first).split('').reverse().map(Number);
+  const b = String(second).split('').reverse().map(Number);
+  let carry = 0;
+  const carries: CarryAdjustment[] = [];
+  for (let index = 0; index < Math.max(a.length, b.length); index++) {
+    const total = (a[index] ?? 0) + (b[index] ?? 0) + carry;
+    carry = Math.floor(total / 10);
+    if (carry) {
+      const column = columnCount - index - 2;
+      if (column >= 0) carries.push({ column, value: carry });
+    }
+  }
+  return carries;
+}
+
+function getDivisionSteps(dividend: number, divisor: number): DivisionStep[] {
+  let remainder = 0;
+  const steps: DivisionStep[] = [];
+
+  String(dividend).split('').forEach((digit, index) => {
+    const partial = remainder * 10 + Number(digit);
+    const quotientDigit = Math.floor(partial / divisor);
+    const partialText = index > 0 && remainder === 0 ? `0${digit}` : String(partial);
+    const product = quotientDigit * divisor;
+    remainder = partial - product;
+    steps.push({ partial: partialText, quotientDigit, product, remainder, endIndex: index });
+  });
+  return steps;
+}
+
+function getMultiplicationPartials(first: number, second: number): MultiplicationPartial[] {
+  return String(second).split('').reverse().map((digit, shift) => ({
+    digits: `${first * Number(digit)}${'0'.repeat(shift)}`,
+  }));
 }
 
 function createSteps(operation: Operation, first: number, second: number): DigitSlot[] {
@@ -143,6 +250,50 @@ function createSteps(operation: Operation, first: number, second: number): Digit
   return steps;
 }
 
+function getBorrowAdjustments(first: number, second: number): BorrowAdjustment[] {
+  const originalDigits = String(first).split('').reverse().map(Number);
+  const adjustedDigits = [...originalDigits];
+  const subtrahendDigits = String(second).split('').reverse().map(Number);
+  const changes = Array<string>(originalDigits.length).fill('');
+
+  for (let index = 0; index < adjustedDigits.length; index++) {
+    if (adjustedDigits[index] >= (subtrahendDigits[index] ?? 0)) continue;
+
+    let donorIndex = index + 1;
+    while (donorIndex < adjustedDigits.length && adjustedDigits[donorIndex] === 0) donorIndex++;
+    if (donorIndex >= adjustedDigits.length) continue;
+
+    adjustedDigits[donorIndex]--;
+    changes[donorIndex] = '−1';
+    for (let borrowedColumn = donorIndex - 1; borrowedColumn > index; borrowedColumn--) {
+      adjustedDigits[borrowedColumn] = 9;
+      changes[borrowedColumn] = '+9';
+    }
+    adjustedDigits[index] += 10;
+    changes[index] = '+10';
+  }
+
+  return adjustedDigits.flatMap((adjusted, digitIndex) => (
+    adjusted !== originalDigits[digitIndex]
+      ? [{
+        column: digitIndex,
+        original: originalDigits[digitIndex],
+        adjusted,
+        change: changes[digitIndex],
+      }]
+      : []
+  ));
+}
+
+function getBorrowAnnotations(first: number, second: number, columnCount: number): string[] {
+  const annotations = Array<string>(columnCount).fill('');
+  getBorrowAdjustments(first, second).forEach(({ column, original, adjusted, change }) => {
+    const alignedColumn = columnCount - String(first).length + column;
+    annotations[alignedColumn] = `${change}: ${original} → ${adjusted}`;
+  });
+  return annotations;
+}
+
 function getExample(operation: Operation, firstDigits: number, secondDigits: number) {
   const repeatedDigit = (digit: number, length: number) => Number(String(digit).repeat(length));
   let first: number;
@@ -155,7 +306,7 @@ function getExample(operation: Operation, firstDigits: number, secondDigits: num
     first = 8 * 10 ** (firstDigits - 1);
     second = repeatedDigit(2, secondDigits);
   } else if (operation === 'multiplication') {
-    first = repeatedDigit(2, firstDigits);
+    first = repeatedDigit(8, firstDigits);
     second = repeatedDigit(3, secondDigits);
   } else {
     second = secondDigits === 1 ? 4 : 10 ** (secondDigits - 1);
@@ -174,7 +325,7 @@ function getExample(operation: Operation, firstDigits: number, secondDigits: num
   const markers = Array<string>(columnCount).fill('');
   const steps: string[] = [];
   const partialProducts: number[] = [];
-  const divisionWorkRows: DivisionWorkRow[] = [];
+  const divisionSteps = operation === 'division' ? getDivisionSteps(first, second) : [];
   const addMarker = (column: number, marker: string) => {
     if (column >= 0 && column < columnCount) {
       markers[column] = markers[column] ? `${markers[column]}; ${marker}` : marker;
@@ -200,21 +351,18 @@ function getExample(operation: Operation, firstDigits: number, secondDigits: num
   } else if (operation === 'subtraction') {
     const firstDigits = String(first).split('').reverse().map(Number);
     const secondDigits = String(second).split('').reverse().map(Number);
-    let borrow = 0;
+    const borrowing = getBorrowAnnotations(first, second, columnCount);
+    borrowing.forEach((annotation, index) => {
+      if (annotation) markers[index] = annotation;
+    });
     for (let index = 0; index < firstDigits.length; index++) {
       const a = firstDigits[index] ?? 0;
       const b = secondDigits[index] ?? 0;
-      const adjusted = a - borrow;
-      const needsBorrow = adjusted < b;
-      const value = adjusted + (needsBorrow ? 10 : 0);
-      if (needsBorrow) {
-        addMarker(columnCount - index - 1, '+10 pinjam');
-        if (index + 1 < firstDigits.length) addMarker(columnCount - index - 2, '−1');
-      }
+      const annotation = borrowing[columnCount - index - 1];
+      const adjusted = annotation ? Number(annotation.split(' → ')[1]) : a;
       steps.push(
-        `${PLACE_NAMES[index]}: ${a}${borrow ? ' − 1 pinjaman' : ''}${needsBorrow ? ` belum cukup. Pinjam 1 dari kolom ${PLACE_NAMES[index + 1]}, lalu ${value} − ${b} = ${value - b}.` : ` − ${b} = ${value - b}.`}`,
+        `${PLACE_NAMES[index]}: ${annotation ? `setelah proses pinjam, angka ${a} menjadi ${adjusted}. ` : ''}${adjusted} − ${b} = ${adjusted - b}.`,
       );
-      borrow = needsBorrow ? 1 : 0;
     }
   } else if (operation === 'multiplication') {
     const firstDigits = String(first).split('').reverse().map(Number);
@@ -237,24 +385,13 @@ function getExample(operation: Operation, firstDigits: number, secondDigits: num
       steps.push('Geser setiap hasil perkalian satu tempat ke kiri untuk setiap nilai tempat pengali, lalu jumlahkan semua baris.');
     }
   } else {
-    let remainder = 0;
-    String(first).split('').forEach((digit, index) => {
-      const partial = remainder * 10 + Number(digit);
-      const quotientDigit = Math.floor(partial / second);
-      const product = quotientDigit * second;
-      const partialText = remainder === 0 && index > 0 && partial < 10 ? `0${digit}` : String(partial);
-      divisionWorkRows.push({ value: partialText, endIndex: index });
-      divisionWorkRows.push({ value: String(product), endIndex: index, negative: true });
-      remainder = partial % second;
-      if (index === String(first).length - 1) {
-        divisionWorkRows.push({ value: String(remainder), endIndex: index });
-      }
+    getDivisionSteps(first, second).forEach((step, index) => {
       steps.push(
-        `${PLACE_NAMES[String(first).length - index - 1]}: bagi ${partial} dengan ${second}, tulis ${quotientDigit} pada hasil. Sisanya ${remainder}; turunkan angka berikutnya.`,
+        `${PLACE_NAMES[String(first).length - index - 1]}: bagi ${step.partial} dengan ${second}, tulis ${step.quotientDigit} pada hasil. Kurangi ${step.product}${index < String(first).length - 1 ? `, lalu turunkan angka ${String(first)[index + 1]}` : `; sisanya ${step.remainder}`}.`,
       );
     });
   }
-  return { first, second, answer, markers, steps, columnCount, partialProducts, divisionWorkRows };
+  return { first, second, answer, markers, steps, columnCount, partialProducts, divisionSteps };
 }
 
 export const MathOperationsPractice: React.FC = () => {
@@ -264,6 +401,10 @@ export const MathOperationsPractice: React.FC = () => {
   const [secondDigits, setSecondDigits] = useState(2);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
+  const [borrowAnswers, setBorrowAnswers] = useState<Record<number, string>>({});
+  const [carryAnswers, setCarryAnswers] = useState<Record<number, string>>({});
+  const [multiplicationAnswers, setMultiplicationAnswers] = useState<Record<string, string>>({});
+  const [divisionAnswers, setDivisionAnswers] = useState<Record<string, string>>({});
   const [round, setRound] = useState(1);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
@@ -274,9 +415,14 @@ export const MathOperationsPractice: React.FC = () => {
   const selectedOperation = OPERATIONS.find((option) => option.id === operation)!;
 
   const beginRound = (nextRound: number, nextScore = score) => {
-    const nextProblem = createProblem(operation, firstDigits, secondDigits);
+    const includeCarryOrBorrow = nextRound % 2 === 0 && (operation !== 'subtraction' || firstDigits > 1);
+    const nextProblem = createProblem(operation, firstDigits, secondDigits, includeCarryOrBorrow);
     setProblem(nextProblem);
     setAnswers(Array(String(nextProblem.answer).length).fill(''));
+    setBorrowAnswers({});
+    setCarryAnswers({});
+    setMultiplicationAnswers({});
+    setDivisionAnswers({});
     setRound(nextRound);
     setScore(nextScore);
     setFeedback(null);
@@ -291,11 +437,50 @@ export const MathOperationsPractice: React.FC = () => {
   };
 
   const checkAnswer = () => {
-    if (!problem || answers.some((answer, index) => problem.hidden.includes(index) && !/^\d$/.test(answer))) {
-      setMessage('Isi semua kotak kosong dengan satu angka.');
+    if (!problem || (problem.operation !== 'division' && answers.some((answer, index) => problem.hidden.includes(index) && !/^\d$/.test(answer)))) {
+      setMessage('Isi semua angka hasil yang kosong dengan satu angka.');
       return;
     }
-    const correct = problem.hidden.every((index) => Number(answers[index]) === Number(resultDigits[index]));
+    if (problem?.borrowAdjustments.some(({ column }) => !/^\d{1,2}$/.test(borrowAnswers[column] ?? ''))) {
+      setMessage('Isi juga semua angka baru setelah meminjam.');
+      return;
+    }
+    if (problem?.carryAdjustments.some(({ column }) => !/^\d$/.test(carryAnswers[column] ?? ''))) {
+      setMessage('Isi juga angka simpanan di atas kolom berikutnya.');
+      return;
+    }
+    if (problem?.divisionSteps.some((step, index) => {
+      const product = String(step.product);
+      return !/^\d$/.test(divisionAnswers[`${index}-quotient`] ?? '')
+        || product.split('').some((_, digitIndex) => !/^\d$/.test(divisionAnswers[`${index}-product-${digitIndex}`] ?? ''))
+        || (index === problem.divisionSteps.length - 1 && !/^\d$/.test(divisionAnswers[`${index}-remainder-0`] ?? ''));
+    })) {
+      setMessage('Lengkapi hasil bagi, hasil perkalian, dan sisa pada setiap langkah porogapit.');
+      return;
+    }
+    if (problem?.hiddenPartialCells.some((key) => !/^\d$/.test(multiplicationAnswers[key] ?? ''))) {
+      setMessage('Isi semua angka hasil perkalian parsial yang kosong.');
+      return;
+    }
+    const divisionQuotient = problem.divisionSteps.map((_, index) => divisionAnswers[`${index}-quotient`] ?? '').join('');
+    const multiplicationPartials = problem.operation === 'multiplication'
+      ? getMultiplicationPartials(problem.first, problem.second)
+      : [];
+    const correct = (problem.operation === 'division'
+      ? Number(divisionQuotient) === problem.answer
+      : problem.hidden.every((index) => Number(answers[index]) === Number(resultDigits[index])))
+      && problem.hiddenPartialCells.every((key) => {
+        const [rowIndex, column] = key.split('-').map(Number);
+        const digits = multiplicationPartials[rowIndex]?.digits ?? '';
+        return multiplicationAnswers[key] === digits[column - (maxDigits - digits.length)];
+      })
+      && problem.borrowAdjustments.every(({ column, adjusted }) => Number(borrowAnswers[column]) === adjusted)
+      && problem.carryAdjustments.every(({ column, value }) => Number(carryAnswers[column]) === value)
+      && problem.divisionSteps.every((step, index) => (
+        divisionAnswers[`${index}-quotient`] === String(step.quotientDigit)
+        && String(step.product).split('').every((digit, digitIndex) => divisionAnswers[`${index}-product-${digitIndex}`] === digit)
+        && (index !== problem.divisionSteps.length - 1 || String(step.remainder).split('').every((digit, digitIndex) => divisionAnswers[`${index}-remainder-${digitIndex}`] === digit))
+      ));
     setFeedback(correct ? 'correct' : 'wrong');
     if (correct) {
       soundFx.playCorrect();
@@ -320,45 +505,454 @@ export const MathOperationsPractice: React.FC = () => {
     }
   };
 
-  const numberRow = (value: number, colorClass: string) => {
+  const numberRow = (
+    value: number,
+    colorClass: string,
+    operator = '',
+    annotations: string[] = [],
+    borrowAdjustments: BorrowAdjustment[] = [],
+    carryAdjustments: CarryAdjustment[] = [],
+    underlineDigits = false,
+  ) => {
     const digits = String(value).split('');
     return (
-      <div className="flex justify-end">
-        <div className={`grid font-mono text-3xl font-black sm:text-4xl ${colorClass}`} style={{ gridTemplateColumns: `repeat(${maxDigits}, minmax(2.25rem, 1fr))` }}>
+      <>
+        {(annotations.some(Boolean) || borrowAdjustments.length > 0 || carryAdjustments.length > 0) && (
+          <tr>
+            {Array.from({ length: maxDigits }, (_, column) => {
+            const digitIndex = column - (maxDigits - digits.length);
+            const annotation = annotations[column];
+            const placeIndex = digitIndex >= 0 ? digits.length - digitIndex - 1 : -1;
+            const adjustment = borrowAdjustments.find((item) => item.column === placeIndex);
+            const carry = carryAdjustments.find((item) => item.column === column);
+            return (
+              <td
+                key={`annotation-${column}`}
+                title={adjustment ? `Angka ${adjustment.original} setelah meminjam` : carry ? 'Angka simpanan untuk kolom berikutnya' : annotation ? `Setelah meminjam: ${annotation}` : undefined}
+                className={`h-8 w-8 whitespace-nowrap text-center align-bottom text-[8px] font-black ${adjustment || carry || annotation ? 'text-rose-700' : 'text-transparent'}`}
+              >
+                {carry ? (
+                  <input
+                    aria-label={`Angka simpanan kolom ${PLACE_NAMES[maxDigits - column - 1] ?? column + 1}`}
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={carryAnswers[carry.column] ?? ''}
+                    disabled={feedback === 'correct'}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(/\D/g, '').slice(0, 1);
+                      setCarryAnswers((current) => ({ ...current, [carry.column]: value }));
+                      setMessage('');
+                    }}
+                    className={`h-5 w-5 border-b text-center text-[10px] outline-none focus:ring-1 focus:ring-rose-400 ${
+                      feedback === 'correct'
+                        ? 'border-emerald-500 text-emerald-800'
+                        : feedback === 'wrong' && Number(carryAnswers[carry.column]) !== carry.value
+                          ? 'border-rose-500 text-rose-800'
+                          : 'border-rose-400 text-rose-800'
+                    }`}
+                  />
+                ) : digitIndex >= 0 && adjustment ? (
+                  <div className="flex items-center justify-center gap-px text-[8px]">
+                    <div>{adjustment.original}→</div>
+                    <input
+                      aria-label={`Angka ${PLACE_NAMES[digits.length - digitIndex - 1]} setelah meminjam`}
+                      inputMode="numeric"
+                      maxLength={2}
+                      value={borrowAnswers[adjustment.column] ?? ''}
+                      disabled={feedback === 'correct'}
+                      onChange={(event) => {
+                        const value = event.target.value.replace(/\D/g, '').slice(0, 2);
+                        setBorrowAnswers((current) => ({ ...current, [adjustment.column]: value }));
+                        setMessage('');
+                      }}
+                      className={`h-5 w-5 border-b text-center text-[10px] outline-none focus:ring-1 focus:ring-rose-400 ${
+                        feedback === 'correct'
+                          ? 'border-emerald-500 text-emerald-800'
+                          : feedback === 'wrong' && Number(borrowAnswers[adjustment.column]) !== adjustment.adjusted
+                            ? 'border-rose-500 text-rose-800'
+                            : 'border-rose-400 text-rose-800'
+                      }`}
+                    />
+                  </div>
+                ) : digitIndex >= 0 && annotation && (
+                  annotation.includes(': ')
+                    ? <div><div className="text-[7px] leading-none">{annotation.split(': ')[0]}</div><div className="text-[9px] leading-none">{annotation.split(': ')[1]}</div></div>
+                    : annotation
+                )}
+              </td>
+            );
+            })}
+            <td className="h-8 w-8" />
+          </tr>
+        )}
+        <tr>
           {Array.from({ length: maxDigits }, (_, column) => {
             const digit = digits[column - (maxDigits - digits.length)];
-            return <span key={column} className="flex h-12 items-center justify-center">{digit ?? ''}</span>;
+            const digitIndex = column - (maxDigits - digits.length);
+            const placeIndex = digitIndex >= 0 ? digits.length - digitIndex - 1 : -1;
+            const wasBorrowedFrom = borrowAdjustments.some((item) => item.column === placeIndex);
+            return (
+              <td
+                key={`digit-${column}`}
+                className={`${DIGIT_CELL_CLASS} font-mono text-right pr-2 text-2xl font-black sm:text-3xl ${colorClass} ${underlineDigits ? 'border-b-2 border-b-slate-700' : ''} ${wasBorrowedFrom ? 'text-slate-400 line-through decoration-rose-500 decoration-2' : ''}`}
+              >
+                {digit ?? ''}
+              </td>
+            );
           })}
-        </div>
-      </div>
+          <td className={`${DIGIT_CELL_CLASS} text-center text-teal-800`}>{operator}</td>
+        </tr>
+      </>
     );
   };
 
-  const renderAnswerCells = () => resultDigits.map((digit, index) => (
-    <span key={index} className="flex h-14 items-center justify-center">
-      {problem?.hidden.includes(index) ? (
+  const renderAnswerCells = (borderTop = false, columnCount = maxDigits) => Array.from({ length: columnCount }, (_, column) => {
+    const answerIndex = column - (columnCount - resultDigits.length);
+    if (answerIndex < 0) return <td key={`empty-${column}`} className={`${DIGIT_CELL_CLASS} ${borderTop ? 'border-t-2 border-t-slate-700' : ''}`} />;
+    const digit = resultDigits[answerIndex];
+    return (
+    <td key={column} className={`${DIGIT_CELL_CLASS} font-mono text-right pr-2 text-2xl font-black sm:text-3xl ${borderTop ? 'border-t-2 border-t-slate-700' : ''}`}>
+      {problem?.hidden.includes(answerIndex) ? (
         <input
-          aria-label={`Angka hasil posisi ${PLACE_NAMES[resultDigits.length - index - 1] || index + 1}`}
+          aria-label={`Angka hasil posisi ${PLACE_NAMES[resultDigits.length - answerIndex - 1] || answerIndex + 1}`}
           inputMode="numeric"
           maxLength={1}
-          value={answers[index] ?? ''}
+          value={answers[answerIndex] ?? ''}
           disabled={feedback === 'correct'}
           onChange={(event) => {
             const value = event.target.value.replace(/\D/g, '').slice(-1);
-            setAnswers((current) => current.map((answer, answerIndex) => answerIndex === index ? value : answer));
+            setAnswers((current) => current.map((answer, index) => index === answerIndex ? value : answer));
             setMessage('');
           }}
-          className={`h-11 w-10 rounded-lg border-2 text-center text-2xl outline-none focus:ring-2 focus:ring-teal-400 ${
+          className={`h-full w-full pr-2 text-right outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400 ${
             feedback === 'correct'
-              ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-              : feedback === 'wrong' && answers[index] !== String(digit)
-                ? 'border-rose-300 bg-rose-50 text-rose-800'
-                : 'border-indigo-300 bg-white text-indigo-900'
+              ? 'border-b-2 border-emerald-500 text-emerald-800'
+              : feedback === 'wrong' && answers[answerIndex] !== String(digit)
+                ? 'border-b-2 border-rose-400 text-rose-800'
+                : 'border-b-2 border-indigo-400 text-indigo-900'
           }`}
         />
-      ) : <span className="text-slate-800">{digit}</span>}
-    </span>
-  ));
+      ) : <div className="pr-2 text-right text-slate-800">{digit}</div>}
+    </td>
+    );
+  });
+
+  const renderExampleRow = (
+    value: number,
+    prefix = '',
+    options: { underline?: boolean; highlightFromRight?: number; borrowAdjustments?: BorrowAdjustment[] } = {},
+  ) => {
+    const digits = String(value).padStart(example.columnCount, ' ').split('');
+    return (
+      <>
+        {options.borrowAdjustments && (
+          <table className="ml-auto table-fixed border-collapse font-mono">
+            <tbody><tr>
+            {digits.map((digit, index) => {
+              const place = example.columnCount - index - 1;
+              const adjustment = options.borrowAdjustments?.find((item) => item.column === place);
+              return (
+                <td key={index} className="h-8 w-8 whitespace-nowrap text-center align-bottom text-[8px] font-bold text-rose-700">
+                  {adjustment && <><div>{adjustment.original}→</div><div>{adjustment.adjusted}</div></>}
+                  {!adjustment && digit.trim() && <div className="text-transparent">0</div>}
+                </td>
+              );
+            })}
+            <td className="h-8 w-8" />
+            </tr></tbody>
+          </table>
+        )}
+        <table className="ml-auto table-fixed border-collapse font-mono">
+          <tbody><tr>
+          {digits.map((digit, index) => {
+            const place = example.columnCount - index - 1;
+            const wasBorrowedFrom = options.borrowAdjustments?.some((item) => item.column === place);
+            return (
+              <td
+                key={index}
+                className={`${DIGIT_CELL_CLASS} pr-2 text-right text-lg font-black text-indigo-950 ${
+                  options.underline ? 'border-b-2 border-indigo-800' : ''
+                } ${
+                  options.highlightFromRight === place ? 'rounded bg-amber-200 text-amber-950' : ''
+                } ${wasBorrowedFrom ? 'text-slate-400 line-through decoration-rose-500 decoration-2' : ''}`}
+              >
+                {digit.trim()}
+              </td>
+            );
+          })}
+          <td className={`${DIGIT_CELL_CLASS} text-center text-lg font-bold text-indigo-800`}>{prefix}</td>
+          </tr></tbody>
+        </table>
+      </>
+    );
+  };
+
+  const renderExampleAnswer = () => (
+    <table className="ml-auto table-fixed border-collapse font-mono">
+      <tbody><tr>
+      {String(example.answer).padStart(example.columnCount, ' ').split('').map((digit, index) => (
+        <td key={index} className={`${DIGIT_CELL_CLASS} border-t-2 border-indigo-800 pr-2 text-right text-lg font-black text-teal-800`}>
+          {digit.trim()}
+        </td>
+      ))}
+      <td className={`${DIGIT_CELL_CLASS} border-t-2 border-indigo-800`} />
+      </tr></tbody>
+    </table>
+  );
+
+  const renderExampleSubtraction = () => {
+    const digits = String(example.first).padStart(example.columnCount, ' ').split('');
+    const adjustments = getBorrowAdjustments(example.first, example.second);
+    const subtrahend = String(example.second).padStart(example.columnCount, ' ').split('');
+    const answer = String(example.answer).padStart(example.columnCount, ' ').split('');
+
+    return (
+      <table className="ml-auto table-fixed border-collapse font-mono">
+        <tbody>
+          {adjustments.length > 0 && (
+            <tr>
+              <td className="h-8 w-8" />
+              {digits.map((digit, index) => {
+                const place = example.columnCount - index - 1;
+                const adjustment = adjustments.find((item) => item.column === place);
+                return (
+                  <td key={index} className="h-8 w-8 pr-2 text-right align-bottom text-xs font-bold text-rose-700">
+                    {adjustment?.adjusted}
+                  </td>
+                );
+              })}
+            </tr>
+          )}
+          <tr>
+            <td className="h-8 w-8" />
+            {digits.map((digit, index) => {
+              const place = example.columnCount - index - 1;
+              const wasAdjusted = adjustments.some((item) => item.column === place);
+              return (
+                <td
+                  key={index}
+                  className={`${DIGIT_CELL_CLASS} pr-2 text-right text-lg font-black text-indigo-950 ${wasAdjusted ? 'text-slate-400 line-through decoration-rose-500 decoration-2' : ''}`}
+                >
+                  {digit.trim()}
+                </td>
+              );
+            })}
+          </tr>
+          <tr>
+            <td className="h-8 w-8 border-b-2 border-indigo-800 text-center text-lg font-bold text-indigo-800">−</td>
+            {subtrahend.map((digit, index) => (
+              <td key={index} className={`${DIGIT_CELL_CLASS} border-b-2 border-indigo-800 pr-2 text-right text-lg font-black text-indigo-950`}>
+                {digit.trim()}
+              </td>
+            ))}
+          </tr>
+          <tr>
+            <td className="h-8 w-8 border-t-2 border-indigo-800" />
+            {answer.map((digit, index) => (
+              <td key={index} className={`${DIGIT_CELL_CLASS} border-t-2 border-indigo-800 pr-2 text-right text-lg font-black text-teal-800`}>
+                {digit.trim()}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    );
+  };
+
+  const renderPlaceHeader = (columnCount: number) => (
+    <table className="ml-auto table-fixed border-collapse font-sans text-[9px] font-semibold text-slate-500">
+      <tbody><tr>
+      {Array.from({ length: columnCount }, (_, column) => {
+        const placeIndex = columnCount - column - 1;
+        return (
+          <td key={column} className="h-5 w-8 text-center">
+            {PLACE_NAMES[placeIndex] ?? `10^${placeIndex}`}
+          </td>
+        );
+      })}
+      <td className="h-5 w-8" />
+      </tr></tbody>
+    </table>
+  );
+
+  const renderExampleDivisionWork = () => {
+    const width = String(example.first).length;
+    const dividend = String(example.first);
+    const quotientDigits = example.divisionSteps.map((step) => String(step.quotientDigit));
+    const renderAlignedDigits = (value: string, endIndex: number, underline = false) => {
+      const startIndex = endIndex + 1 - value.length;
+      return Array.from({ length: width }, (_, column) => {
+        const digit = value[column - startIndex];
+        const underlined = underline && column >= startIndex && column <= endIndex;
+        return (
+          <td
+            key={column}
+            className={`h-8 w-8 pr-2 text-right text-sm font-bold text-slate-700 ${underlined ? 'border-b-2 border-slate-700' : ''}`}
+          >
+            {digit ?? ''}
+          </td>
+        );
+      });
+    };
+
+    return (
+      <table className="mx-auto table-fixed border-collapse font-mono">
+        <tbody>
+          <tr>
+            <td className="h-8 w-8" />
+            {quotientDigits.map((digit, index) => (
+              <td key={index} className="h-8 w-8 border-b-2 border-indigo-800 pr-2 text-right text-lg font-black text-teal-800">
+                {digit}
+              </td>
+            ))}
+          </tr>
+          <tr>
+            <td className="h-8 w-8 border-r-2 border-indigo-800 text-center text-lg font-black text-indigo-900">
+              {example.second}
+            </td>
+            {Array.from(dividend, (digit, index) => (
+              <td key={index} className="h-8 w-8 pr-2 text-right text-lg font-black text-slate-800">
+                {digit}
+              </td>
+            ))}
+          </tr>
+          {example.divisionSteps.map((step, index) => (
+            <React.Fragment key={`long-division-step-${index}`}>
+              <tr>
+                <td className="h-8 w-8 text-center font-bold text-slate-600">−</td>
+                {renderAlignedDigits(String(step.product), step.endIndex, true)}
+              </tr>
+              {index < example.divisionSteps.length - 1 ? (
+                <tr>
+                  <td className="h-8 w-8" />
+                  {renderAlignedDigits(example.divisionSteps[index + 1].partial, example.divisionSteps[index + 1].endIndex)}
+                </tr>
+              ) : (
+                <tr>
+                  <td className="h-8 w-8" />
+                  {renderAlignedDigits(String(step.remainder), step.endIndex)}
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  const renderDivisionWork = () => {
+    if (!problem) return null;
+    const width = String(problem.first).length;
+    const renderStepCells = (
+      value: string,
+      stepIndex: number,
+      field: 'partial' | 'product' | 'remainder',
+      underline = false,
+    ) => {
+      const digits = value.split('');
+      const endIndex = problem.divisionSteps[stepIndex].endIndex;
+      const startIndex = endIndex + 1 - digits.length;
+      return Array.from({ length: width }, (_, column) => {
+        const digitIndex = column - startIndex;
+        const digit = digits[digitIndex];
+        const hasDigit = digitIndex >= 0 && digitIndex < digits.length;
+        const key = `${stepIndex}-${field}-${digitIndex}`;
+        const cellClass = `h-8 w-8 pr-2 text-right font-mono text-sm font-bold ${underline && hasDigit ? 'border-b-2 border-slate-700' : ''}`;
+        if (!hasDigit) return <td key={`${field}-blank-${column}`} className={cellClass} />;
+        if (field === 'partial') {
+          return <td key={key} className={`${cellClass} text-slate-700`}>{digit}</td>;
+        }
+
+        const valueEntered = divisionAnswers[key] ?? '';
+        const expected = digit;
+        return (
+          <td key={key} className={`${cellClass} text-center`}>
+            <input
+              aria-label={`${field === 'product' ? 'Hasil perkalian' : 'Sisa'} langkah ${stepIndex + 1}, angka ${digitIndex + 1}`}
+              inputMode="numeric"
+              maxLength={1}
+              value={valueEntered}
+              disabled={feedback === 'correct'}
+              onChange={(event) => {
+                const nextValue = event.target.value.replace(/\D/g, '').slice(-1);
+                setDivisionAnswers((current) => ({ ...current, [key]: nextValue }));
+                setMessage('');
+              }}
+              className={`h-7 w-7 border-b-2 bg-transparent text-center font-mono text-sm font-bold outline-none focus:ring-1 focus:ring-teal-400 ${
+                feedback === 'correct'
+                  ? 'border-emerald-500 text-emerald-800'
+                  : feedback === 'wrong' && valueEntered !== expected
+                    ? 'border-rose-400 text-rose-800'
+                    : 'border-indigo-400 text-indigo-900'
+              }`}
+            />
+          </td>
+        );
+      });
+    };
+
+    return (
+      <table className="mx-auto table-fixed border-collapse font-mono">
+        <tbody>
+          <tr>
+            <td className="h-8 w-8" />
+            {problem.divisionSteps.map((step, index) => {
+              const key = `${index}-quotient`;
+              const value = divisionAnswers[key] ?? '';
+              return (
+                <td key={key} className="h-8 w-8 border-b-2 border-indigo-800 text-center">
+                  <input
+                    aria-label={`Hasil bagi nilai tempat ${PLACE_NAMES[problem.divisionSteps.length - index - 1] ?? index + 1}`}
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={value}
+                    disabled={feedback === 'correct'}
+                    onChange={(event) => {
+                      const nextValue = event.target.value.replace(/\D/g, '').slice(-1);
+                      setDivisionAnswers((current) => ({ ...current, [key]: nextValue }));
+                      setMessage('');
+                    }}
+                    className={`h-7 w-7 border-b-2 bg-transparent text-center text-lg font-black outline-none focus:ring-1 focus:ring-teal-400 ${
+                      feedback === 'correct'
+                        ? 'border-emerald-500 text-emerald-800'
+                        : feedback === 'wrong' && value !== String(step.quotientDigit)
+                          ? 'border-rose-400 text-rose-800'
+                          : 'border-indigo-400 text-indigo-900'
+                    }`}
+                  />
+                </td>
+              );
+            })}
+          </tr>
+          <tr>
+            <td className="h-9 w-8 border-r-2 border-slate-700 text-center text-xl font-black text-slate-800">{problem.second}</td>
+            {String(problem.first).split('').map((digit, index) => (
+              <td key={index} className="h-9 w-8 pr-2 text-right text-2xl font-black text-slate-800">{digit}</td>
+            ))}
+          </tr>
+          {problem.divisionSteps.map((step, index) => (
+            <React.Fragment key={`division-step-${index}`}>
+              <tr>
+                <td className="h-8 w-8 text-center font-bold text-slate-600">−</td>
+                {renderStepCells(String(step.product), index, 'product', true)}
+              </tr>
+              {index < problem.divisionSteps.length - 1 ? (
+                <tr>
+                  <td className="h-8 w-8" />
+                  {renderStepCells(problem.divisionSteps[index + 1].partial, index + 1, 'partial')}
+                </tr>
+              ) : (
+                <tr>
+                  <td className="h-8 w-8" />
+                  {renderStepCells(String(step.remainder), index, 'remainder')}
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
 
   return (
     <section className="rounded-3xl border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-indigo-50 p-4 shadow-sm sm:p-7">
@@ -451,107 +1045,107 @@ export const MathOperationsPractice: React.FC = () => {
             <p className="mt-1 text-xs text-slate-500">
               Contoh {firstDigits} digit {selectedOperation.symbol} {secondDigits} digit:
             </p>
-            <div className="my-4 flex justify-center rounded-xl bg-indigo-50 p-4">
+            <div className="my-4 flex justify-center overflow-x-auto rounded-xl bg-indigo-50 p-4">
+              <div className="font-mono">
+                <p className="mb-2 text-center text-lg font-black text-teal-800">
+                  {example.first} {selectedOperation.symbol} {example.second} = {example.answer}
+                </p>
+                <hr className="mb-2 border-indigo-200" />
+                <p className="mb-2 text-center font-sans text-xs font-bold text-indigo-900">Penyelesaian</p>
               {operation === 'division' ? (
-                <div className="font-mono">
-                  <div className="grid" style={{ gridTemplateColumns: `2.5rem 1.25rem repeat(${String(example.first).length}, minmax(1.5rem, 1fr))` }}>
-                    <span className="col-span-2" />
-                    {String(example.answer).padStart(String(example.first).length, ' ').split('').map((digit, index) => (
-                      <span key={`quotient-${index}`} className="flex h-8 items-center justify-center text-xl font-black text-teal-800">{digit.trim()}</span>
-                    ))}
-                    <span className="col-span-2 flex items-center justify-center text-lg font-black text-indigo-900">{example.second}</span>
-                    <div
-                      className="grid border-l-2 border-t-2 border-indigo-800 pl-1"
-                      style={{ gridColumn: `span ${String(example.first).length}`, gridTemplateColumns: `repeat(${String(example.first).length}, minmax(1.5rem, 1fr))` }}
-                    >
-                      {String(example.first).split('').map((digit, index) => (
-                        <span key={`dividend-${index}`} className="flex h-9 items-center justify-center text-xl font-black text-indigo-950">{digit}</span>
-                      ))}
-                    </div>
-                    {example.divisionWorkRows.map((row, rowIndex) => {
-                      const digits = row.value.split('');
-                      const startIndex = Math.max(0, row.endIndex + 1 - digits.length);
-                      return (
-                        <React.Fragment key={`division-work-${rowIndex}`}>
-                          <span />
-                          <span className="flex h-7 items-center justify-center text-sm font-bold text-slate-600">
-                            {row.negative ? '−' : ''}
-                          </span>
-                          {Array.from({ length: String(example.first).length }, (_, column) => {
-                            const digit = digits[column - startIndex];
-                            return (
-                              <span key={column} className="flex h-7 items-center justify-center text-sm font-bold text-slate-600">
-                                {digit ?? ''}
-                              </span>
-                            );
-                          })}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
+                <div>
+                  {renderExampleDivisionWork()}
                 </div>
               ) : (
-                <div
-                  className="grid font-mono"
-                  style={{ gridTemplateColumns: `2rem repeat(${example.columnCount}, minmax(1.5rem, 1fr))` }}
-                >
-                  <span />
-                  {example.markers.map((marker, index) => (
-                    <span key={`marker-${index}`} className="flex h-7 items-end justify-center whitespace-nowrap text-[9px] font-bold text-rose-700">
-                      {marker}
-                    </span>
-                  ))}
-                  <span />
-                  {String(example.first).padStart(example.columnCount, ' ').split('').map((digit, index) => (
-                    <span key={`first-${index}`} className="flex h-9 items-center justify-center text-xl font-black text-indigo-950 sm:text-2xl">
-                      {digit.trim()}
-                    </span>
-                  ))}
-                  <span className="flex h-9 items-center justify-center text-xl font-black text-teal-800">{selectedOperation.symbol}</span>
-                  {String(example.second).padStart(example.columnCount, ' ').split('').map((digit, index) => (
-                    <span key={`second-${index}`} className="flex h-9 items-center justify-center text-xl font-black text-indigo-950 sm:text-2xl">
-                      {digit.trim()}
-                    </span>
-                  ))}
-                  {operation === 'multiplication' && example.partialProducts.map((partial, index) => (
-                    <React.Fragment key={`partial-${index}`}>
-                      <span className="flex h-8 items-center justify-center text-lg font-bold text-slate-600">
-                        {index > 0 ? '+' : ''}
-                      </span>
-                      {String(partial).padStart(example.columnCount, ' ').split('').map((digit, digitIndex) => (
-                        <span key={digitIndex} className="flex h-8 items-center justify-center text-lg font-bold text-slate-600">
-                          {digit.trim()}
-                        </span>
+                <div className="space-y-0">
+                  {operation === 'addition' && renderPlaceHeader(example.columnCount)}
+                  {operation === 'addition' && (
+                    <table className="ml-auto table-fixed border-collapse">
+                      <tbody><tr>
+                      {example.markers.map((marker, index) => (
+                        <td key={`marker-${index}`} title={marker || undefined} className="h-8 w-8 whitespace-nowrap text-center align-bottom text-[9px] font-bold text-rose-700">
+                          {marker.includes(': ')
+                            ? <><div>{marker.split(': ')[0]}</div><div>{marker.split(': ')[1]}</div></>
+                            : marker.replace('simpan ', '')}
+                        </td>
                       ))}
-                    </React.Fragment>
-                  ))}
-                  <span className="border-t-2 border-indigo-800" />
-                  <span
-                    className="border-t-2 border-indigo-800"
-                    style={{ gridColumn: `span ${example.columnCount}` }}
-                  />
-                  <span />
-                  {String(example.answer).padStart(example.columnCount, ' ').split('').map((digit, index) => (
-                    <span key={`answer-${index}`} className="flex h-9 items-center justify-center text-xl font-black text-teal-800 sm:text-2xl">
-                      {digit.trim()}
-                    </span>
-                  ))}
+                      <td className="h-8 w-8" />
+                      </tr></tbody>
+                    </table>
+                  )}
+                  {operation === 'subtraction' ? (
+                    renderExampleSubtraction()
+                  ) : (
+                    <>
+                      {renderExampleRow(example.first)}
+                      {renderExampleRow(example.second, selectedOperation.symbol, { underline: true })}
+                      {operation === 'multiplication' && example.partialProducts.map((partial, index) => (
+                        <React.Fragment key={`partial-${index}`}>
+                          {renderExampleRow(partial, index > 0 ? '+' : '')}
+                        </React.Fragment>
+                      ))}
+                      {renderExampleAnswer()}
+                    </>
+                  )}
                 </div>
               )}
+              </div>
             </div>
             {example.markers.some(Boolean) && (
               <p className="-mt-2 mb-3 text-center text-[10px] font-semibold text-rose-700">
-                Catatan merah di atas angka menunjukkan simpanan atau angka yang dipinjam.
+                {operation === 'subtraction'
+                  ? 'Merah: −1 berarti meminjam dari kolom; +10 berarti angka itu menerima pinjaman.'
+                  : 'Catatan merah di atas angka menunjukkan angka simpanan.'}
               </p>
             )}
-            <ol className="space-y-2">
-              {example.steps.map((step, index) => (
-                <li key={step} className="flex gap-3 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 font-black text-indigo-800">{index + 1}</span>
-                  {step}
-                </li>
-              ))}
-            </ol>
+            <hr className="my-3 border-indigo-100" />
+            <h4 className="mb-2 text-xs font-bold text-indigo-900">Langkah demi langkah</h4>
+            {operation === 'multiplication' ? (
+              <div className="space-y-3">
+                {example.partialProducts.map((partial, index) => {
+                  const multiplierDigit = Number(String(example.second).split('').reverse()[index]);
+                  const place = PLACE_NAMES[index] ?? `nilai tempat ke-${index + 1}`;
+                  const unshiftedProduct = example.first * multiplierDigit;
+                  return (
+                    <div key={`multiply-step-${index}`} className="rounded-xl bg-slate-50 p-3">
+                      <p className="mb-2 text-xs font-bold text-slate-700">
+                        Kalikan bilangan pertama dengan angka {index === 0 ? 'satuan' : place} ({multiplierDigit}):
+                      </p>
+                      <div className="inline-block">
+                        {renderExampleRow(example.first)}
+                        {renderExampleRow(example.second, '×', { underline: true, highlightFromRight: index })}
+                        {renderExampleRow(partial)}
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-teal-800">
+                        {example.first} × {multiplierDigit} = {unshiftedProduct}
+                        {index > 0 && `, geser ${index} tempat ke kiri menjadi ${partial}.`}
+                      </p>
+                    </div>
+                  );
+                })}
+                {example.partialProducts.length > 1 && (
+                  <div className="rounded-xl bg-indigo-50 p-3">
+                    <p className="mb-2 text-xs font-bold text-indigo-900">Jumlahkan hasil perkalian parsial:</p>
+                    <div className="inline-block">
+                      {example.partialProducts.map((partial, index) => renderExampleRow(partial, index > 0 ? '+' : ''))}
+                      {renderExampleAnswer()}
+                    </div>
+                    <p className="mt-2 text-xs font-semibold text-teal-800">
+                      {example.partialProducts.join(' + ')} = {example.answer}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <ol className="space-y-2">
+                {example.steps.map((step, index) => (
+                  <li key={step} className="flex gap-3 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 font-black text-indigo-800">{index + 1}</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            )}
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
               {operation === 'division'
                 ? 'Kerjakan pembagian dari angka paling kiri. Turunkan angka berikutnya setelah setiap langkah.'
@@ -572,77 +1166,189 @@ export const MathOperationsPractice: React.FC = () => {
               </span>
               <span className="text-sm font-black text-amber-700">⭐ {score} benar</span>
             </div>
-            <p className="mb-4 text-center text-sm font-semibold text-slate-600">Isi angka yang hilang pada hasil hitungan.</p>
-            <div className="mx-auto max-w-sm rounded-2xl border border-slate-100 bg-slate-50 p-4 sm:p-6">
+            <p className="mb-4 text-center text-sm font-semibold text-slate-600">
+              Isi angka hasil yang kosong, termasuk hasil perkalian parsial, angka simpanan, atau angka baru setelah meminjam.
+            </p>
+            <div className="mx-auto max-w-sm overflow-x-auto rounded-2xl bg-slate-50 p-4 sm:p-6">
+              <p className="mb-3 text-center font-mono text-lg font-black text-indigo-900" aria-label="Soal hitung">
+                {problem.first} {selectedOperation.symbol} {problem.second} = ?
+              </p>
               {problem.operation === 'division' ? (
-                <div className="mx-auto w-fit font-mono">
-                  <div
-                    className="grid"
-                    style={{ gridTemplateColumns: `3rem 1.25rem repeat(${String(problem.first).length}, minmax(2rem, 1fr))` }}
-                  >
-                    <span className="col-span-2" />
-                    {Array.from({ length: String(problem.first).length - resultDigits.length }, (_, index) => (
-                      <span key={`quotient-space-${index}`} />
-                    ))}
-                    {renderAnswerCells()}
-                    <span className="col-span-2 flex items-center justify-center text-xl font-black text-slate-800">{problem.second}</span>
-                    <div
-                      className="grid border-l-2 border-t-2 border-slate-700 pl-1"
-                      style={{ gridColumn: `span ${String(problem.first).length}`, gridTemplateColumns: `repeat(${String(problem.first).length}, minmax(2rem, 1fr))` }}
-                    >
-                      {String(problem.first).split('').map((digit, index) => (
-                        <span key={`dividend-${index}`} className="flex h-12 items-center justify-center text-2xl font-black text-slate-800">{digit}</span>
-                      ))}
-                    </div>
-                    {Array.from({ length: String(problem.first).length * 3 }, (_, index) => (
-                      <React.Fragment key={`division-workspace-${index}`}>
-                        <span className="col-span-2" />
-                        <div className="h-7 border-b-2 border-dashed border-slate-300" style={{ gridColumn: `span ${String(problem.first).length}` }} />
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-center text-xs text-slate-500">Kerjakan porogapit dari kiri ke kanan, lalu turunkan angka berikutnya.</p>
-                </div>
+                <>
+                  {renderDivisionWork()}
+                  <p className="mt-3 text-center text-xs text-slate-500">
+                    Isi hasil bagi di atas. Kurangi hasil perkalian, lalu turunkan angka berikutnya.
+                  </p>
+                </>
               ) : (
                 <>
-                  {numberRow(problem.first, 'text-slate-800')}
-                  <div className="flex items-center justify-end gap-2 border-b-2 border-slate-700">
-                    <span className="w-7 text-center text-2xl font-black text-teal-800">{selectedOperation.symbol}</span>
-                    {numberRow(problem.second, 'text-slate-800')}
-                  </div>
-                  {problem.operation === 'multiplication' && String(problem.second).split('').reverse().map((digit, index) => {
+                  <div className="rounded-lg bg-sky-50 p-2">
+                    {problem.operation === 'addition' && renderPlaceHeader(maxDigits)}
+                    <table className="ml-auto table-fixed border-collapse font-mono">
+                      <tbody>
+                    {problem.operation === 'subtraction' ? (
+                      <>
+                        {problem.borrowAdjustments.length > 0 && (
+                          <tr>
+                            <td className="h-8 w-8" />
+                            {Array.from({ length: maxDigits }, (_, column) => {
+                              const place = maxDigits - column - 1;
+                              const adjustment = problem.borrowAdjustments.find((item) => item.column === place);
+                              return (
+                                <td key={`borrow-${column}`} className="h-8 w-8 pr-2 text-right align-bottom text-[10px] font-bold text-rose-700">
+                                  {adjustment && (
+                                    <input
+                                      aria-label={`Angka ${PLACE_NAMES[place] ?? `nilai tempat ke-${place + 1}`} setelah meminjam`}
+                                      inputMode="numeric"
+                                      maxLength={2}
+                                      value={borrowAnswers[adjustment.column] ?? ''}
+                                      disabled={feedback === 'correct'}
+                                      onChange={(event) => {
+                                        const value = event.target.value.replace(/\D/g, '').slice(0, 2);
+                                        setBorrowAnswers((current) => ({ ...current, [adjustment.column]: value }));
+                                        setMessage('');
+                                      }}
+                                      className={`h-5 w-7 border-b bg-transparent text-right outline-none focus:ring-1 focus:ring-rose-400 ${
+                                        feedback === 'correct'
+                                          ? 'border-emerald-500 text-emerald-800'
+                                          : feedback === 'wrong' && Number(borrowAnswers[adjustment.column]) !== adjustment.adjusted
+                                            ? 'border-rose-500 text-rose-800'
+                                            : 'border-rose-400 text-rose-800'
+                                      }`}
+                                    />
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        )}
+                        <tr>
+                          <td className="h-8 w-8" />
+                          {String(problem.first).padStart(maxDigits, ' ').split('').map((digit, column) => {
+                            const place = maxDigits - column - 1;
+                            const wasAdjusted = problem.borrowAdjustments.some((item) => item.column === place);
+                            return (
+                              <td
+                                key={`first-${column}`}
+                                className={`${DIGIT_CELL_CLASS} pr-2 text-right font-mono text-2xl font-black text-slate-800 ${wasAdjusted ? 'text-slate-400 line-through decoration-rose-500 decoration-2' : ''}`}
+                              >
+                                {digit.trim()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className={`${DIGIT_CELL_CLASS} text-center text-teal-800`}>−</td>
+                          {String(problem.second).padStart(maxDigits, ' ').split('').map((digit, column) => (
+                            <td key={`second-${column}`} className={`${DIGIT_CELL_CLASS} border-b-2 border-b-slate-700 pr-2 text-right font-mono text-2xl font-black text-slate-800`}>
+                              {digit.trim()}
+                            </td>
+                          ))}
+                        </tr>
+                      </>
+                    ) : (
+                      <>
+                        {numberRow(
+                          problem.first,
+                          'text-slate-800',
+                          '',
+                          [],
+                          [],
+                          problem.operation === 'addition' ? problem.carryAdjustments : [],
+                        )}
+                        {numberRow(
+                          problem.second,
+                          'text-slate-800',
+                          selectedOperation.symbol,
+                          [],
+                          [],
+                          [],
+                          problem.operation === 'multiplication',
+                        )}
+                      </>
+                    )}
+                      </tbody>
+                    </table>
+                    {problem.operation === 'subtraction' && problem.borrowAdjustments.length > 0 && (
+                      <p className="mb-1 text-right text-[10px] font-semibold text-rose-700">
+                        Isikan angka setelah meminjam di atas. Angka lama dicoret merah.
+                      </p>
+                    )}
+                    {problem.operation === 'addition' && problem.carryAdjustments.length > 0 && (
+                      <p className="mb-1 text-right text-[10px] font-semibold text-rose-700">
+                        Isikan angka simpanan pada bagian merah di atas kolom berikutnya.
+                      </p>
+                    )}
+                  {problem.operation === 'multiplication' && getMultiplicationPartials(problem.first, problem.second).map(({ digits }, index) => {
                     const multiplierPlace = PLACE_NAMES[index] ?? `nilai tempat ke-${index + 1}`;
-                    const partialLength = Math.min(maxDigits, String(problem.first * Number(digit)).length + index);
+                    const multiplierDigit = String(problem.second).split('').reverse()[index];
+                    const startColumn = maxDigits - digits.length;
                     return (
                       <div key={`partial-work-${index}`} className="mt-2">
-                        <p className="text-right text-[10px] font-semibold text-slate-500">Hasil kali {multiplierPlace} ({digit})</p>
-                        <div className="flex justify-end">
-                          <span className="flex w-7 items-center justify-center text-lg font-bold text-slate-500">{index > 0 ? '+' : ''}</span>
-                          <div className="grid" style={{ gridTemplateColumns: `repeat(${maxDigits}, minmax(2.25rem, 1fr))` }}>
-                            {Array.from({ length: maxDigits - partialLength }, (_, blankIndex) => (
-                              <span key={`blank-${blankIndex}`} />
-                            ))}
-                            {Array.from({ length: partialLength }, (_, digitIndex) => (
-                              <span key={digitIndex} className="m-1 h-9 rounded-md border border-dashed border-slate-300 bg-white/70" />
-                            ))}
-                          </div>
-                        </div>
+                        <p className="text-right text-[10px] font-semibold text-slate-500">Hasil kali {multiplierPlace} ({multiplierDigit})</p>
+                        <table className="ml-auto table-fixed border-collapse">
+                          <tbody><tr>
+                            {Array.from({ length: maxDigits }, (_, column) => {
+                              const digitIndex = column - startColumn;
+                              if (digitIndex < 0 || digitIndex >= digits.length) {
+                                return <td key={`blank-${column}`} className="h-8 w-8" />;
+                              }
+                              const key = `${index}-${column}`;
+                              const value = multiplicationAnswers[key] ?? '';
+                              const isHidden = problem.hiddenPartialCells.includes(key);
+                              return (
+                                <td key={key} className={`${DIGIT_CELL_CLASS} pr-2 text-right text-lg font-black text-indigo-950`}>
+                                  {isHidden ? (
+                                    <input
+                                      aria-label={`Hasil perkalian ${multiplierPlace}, angka ${digitIndex + 1}`}
+                                      inputMode="numeric"
+                                      maxLength={1}
+                                      value={value}
+                                      disabled={feedback === 'correct'}
+                                      onChange={(event) => {
+                                        const nextValue = event.target.value.replace(/\D/g, '').slice(-1);
+                                        setMultiplicationAnswers((current) => ({ ...current, [key]: nextValue }));
+                                        setMessage('');
+                                      }}
+                                      className={`h-full w-full text-right outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400 ${
+                                        feedback === 'correct'
+                                          ? 'border-b-2 border-emerald-500 text-emerald-800'
+                                          : feedback === 'wrong' && value !== digits[digitIndex]
+                                            ? 'border-b-2 border-rose-400 text-rose-800'
+                                            : 'border-b-2 border-indigo-400 text-indigo-900'
+                                      }`}
+                                    />
+                                  ) : digits[digitIndex]}
+                                </td>
+                              );
+                            })}
+                            <td className={`${DIGIT_CELL_CLASS} text-center text-lg font-bold text-indigo-800`}>{index > 0 ? '+' : ''}</td>
+                          </tr></tbody>
+                        </table>
                       </div>
                     );
                   })}
                   {problem.operation === 'multiplication' ? (
-                    <div className="mt-2 flex justify-end border-t-2 border-slate-700">
-                      <div className="grid font-mono text-3xl font-black sm:text-4xl" style={{ gridTemplateColumns: `repeat(${maxDigits}, minmax(2.25rem, 1fr))` }}>
-                        {renderAnswerCells()}
-                      </div>
+                    <div className="mt-2 flex justify-end">
+                      <table className="table-fixed border-collapse font-mono">
+                        <tbody><tr>
+                        {renderAnswerCells(true)}
+                        <td className="h-8 w-8 border-t-2 border-indigo-800" />
+                        </tr></tbody>
+                      </table>
                     </div>
                   ) : (
                     <div className="flex justify-end">
-                      <div className="grid font-mono text-3xl font-black sm:text-4xl" style={{ gridTemplateColumns: `repeat(${maxDigits}, minmax(2.25rem, 1fr))` }}>
-                        {renderAnswerCells()}
-                      </div>
+                      <table className="table-fixed border-collapse font-mono">
+                        <tbody><tr>
+                        {problem.operation === 'subtraction' && <td className="h-8 w-8 border-t-2 border-slate-700" />}
+                        {renderAnswerCells(true)}
+                        {problem.operation !== 'subtraction' && <td className="h-8 w-8 border-t-2 border-slate-700" />}
+                        </tr></tbody>
+                      </table>
                     </div>
                   )}
+                  </div>
                 </>
               )}
               {problem.operation === 'division' && (
