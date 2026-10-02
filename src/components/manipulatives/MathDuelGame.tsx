@@ -271,13 +271,17 @@ export const MathDuelGame: React.FC = () => {
     setFlash(null);
   };
 
-  const winnerName = scores.p1 === scores.p2 ? null : scores.p1 > scores.p2 ? names.p1 : names.p2;
+  const playerNames = {
+    p1: names.p1.trim() || 'Pemain 1',
+    p2: names.p2.trim() || 'Pemain 2',
+  };
+  const winnerName = scores.p1 === scores.p2 ? null : scores.p1 > scores.p2 ? playerNames.p1 : playerNames.p2;
   const timerPct = Math.max(0, (timeLeft / ROUND_SECONDS) * 100);
   const scorePercent = (side: PlayerKey) => Math.round((scores[side] / questionCount) * 100);
 
 
   const renderPanel = (side: PlayerKey) => {
-    const name = names[side];
+    const name = playerNames[side];
     const choices = side === 'p1' ? question?.choicesP1 : question?.choicesP2;
     const isFlashOk = flash?.side === side && flash.ok;
     const isFlashBad = flash?.side === side && !flash.ok;
@@ -375,7 +379,7 @@ export const MathDuelGame: React.FC = () => {
               <input
                 value={names.p1}
                 maxLength={14}
-                onChange={(e) => setNames((n) => ({ ...n, p1: e.target.value || 'Pemain 1' }))}
+                onChange={(e) => setNames((n) => ({ ...n, p1: e.target.value }))}
                 className="w-full mt-1 px-4 py-3 rounded-xl border border-slate-300 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -384,7 +388,7 @@ export const MathDuelGame: React.FC = () => {
               <input
                 value={names.p2}
                 maxLength={14}
-                onChange={(e) => setNames((n) => ({ ...n, p2: e.target.value || 'Pemain 2' }))}
+                onChange={(e) => setNames((n) => ({ ...n, p2: e.target.value }))}
                 className="w-full mt-1 px-4 py-3 rounded-xl border border-slate-300 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -599,7 +603,7 @@ export const MathDuelGame: React.FC = () => {
             <>
               <h4 className="text-2xl font-black text-slate-900">{winnerName} MENANG!</h4>
               <p className="text-sm text-slate-500">
-                Skor akhir: {names.p1} {scores.p1} - {scores.p2} {names.p2}
+                Skor akhir: {playerNames.p1} {scores.p1} - {scores.p2} {playerNames.p2}
               </p>
               <div className="text-3xl">🎊🎉✨🎊🎉</div>
             </>
@@ -607,7 +611,7 @@ export const MathDuelGame: React.FC = () => {
             <>
               <h4 className="text-2xl font-black text-slate-900">SERI!</h4>
               <p className="text-sm text-slate-500">
-                Skor akhir: {names.p1} {scores.p1} - {scores.p2} {names.p2}. Sama-sama hebat!
+                Skor akhir: {playerNames.p1} {scores.p1} - {scores.p2} {playerNames.p2}. Sama-sama hebat!
               </p>
             </>
           )}

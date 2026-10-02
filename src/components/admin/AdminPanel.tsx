@@ -66,8 +66,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     teacherName: 'Guru Penggerak',
   });
 
-  // Admin tabs: 'literasi' | 'numerasi' | 'users' | 'trash' | 'settings'
-  const [activeTab, setActiveTab] = useState<'literasi' | 'numerasi' | 'users' | 'trash' | 'settings'>('literasi');
+  // Admin tabs: 'dashboard' | 'literasi' | 'numerasi' | 'users' | 'trash' | 'settings'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'literasi' | 'numerasi' | 'users' | 'trash' | 'settings'>(
+    teacherWorkspace ? 'dashboard' : 'literasi',
+  );
 
   // Fase Filter for SD (fase-a, fase-b, fase-c)
   const [selectedFaseFilter, setSelectedFaseFilter] = useState<'all' | EducationLevel>('all');
@@ -1069,6 +1071,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* Navigation Sub-Tabs & Actions Bar */}
       <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3 shrink-0 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+          {teacherWorkspace && (
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                setActiveTab('dashboard');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              🏠 Dashboard
+            </button>
+          )}
           <button
             onClick={() => {
               soundFx.playClick();
@@ -1308,6 +1325,120 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         ) : (
           <>
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6">
+                <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-teal-950 to-indigo-950 p-6 text-white shadow-lg sm:p-8">
+                  <div aria-hidden="true" className="absolute -right-12 -top-20 h-64 w-64 rounded-full bg-teal-400/10 blur-3xl" />
+                  <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-200">Ringkasan Pengelolaan</p>
+                      <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+                        Selamat datang, {adminConfig.teacherName}.
+                      </h2>
+                      <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-300">
+                        Pantau materi, aktivitas, dan perkembangan siswa di {adminConfig.schoolName}.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-teal-200">Pusat pembelajaran</div>
+                      <div className="mt-1 font-semibold">Literasi · Numerasi · Prestasi Siswa</div>
+                    </div>
+                  </div>
+                </section>
+
+                <section aria-label="Ringkasan data pembelajaran" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {[
+                    { label: 'Siswa terdata', value: users.length, icon: '👥', color: 'text-emerald-700 bg-emerald-50' },
+                    { label: 'Materi literasi', value: passages.length, icon: '📖', color: 'text-teal-700 bg-teal-50' },
+                    { label: 'Soal numerasi', value: numeracyList.length, icon: '🧮', color: 'text-indigo-700 bg-indigo-50' },
+                    {
+                      label: 'Aktivitas selesai',
+                      value: users.reduce(
+                        (total, user) => total + (user.completedPassages?.length || 0) + (user.completedNumeracy?.length || 0),
+                        0,
+                      ),
+                      icon: '✓',
+                      color: 'text-amber-700 bg-amber-50',
+                    },
+                  ].map((stat) => (
+                    <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:p-5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-slate-500">{stat.label}</span>
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black ${stat.color}`}>{stat.icon}</span>
+                      </div>
+                      <div className="mt-3 text-2xl font-black tracking-tight text-slate-900">{stat.value.toLocaleString('id-ID')}</div>
+                    </div>
+                  ))}
+                </section>
+
+                <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">Siswa dengan Poin Tertinggi</h3>
+                        <p className="mt-1 text-xs text-slate-500">Apresiasi untuk konsistensi dan partisipasi belajar.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('users')}
+                        className="text-xs font-bold text-teal-700 hover:text-teal-900"
+                      >
+                        Kelola siswa →
+                      </button>
+                    </div>
+                    {users.length > 0 ? (
+                      <div className="mt-4 divide-y divide-slate-100">
+                        {[...users]
+                          .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+                          .slice(0, 5)
+                          .map((user, index) => (
+                            <div key={user.id || user.studentName} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-600">{index + 1}</span>
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-lg">{user.avatar || '🎒'}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-bold text-slate-800">{user.studentName}</span>
+                                <span className="mt-0.5 block text-[11px] text-slate-500">{user.gradeLevel || 'Jenjang belum diatur'}</span>
+                              </span>
+                              <span className="shrink-0 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800">★ {(user.totalPoints || 0).toLocaleString('id-ID')}</span>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center text-xs text-slate-500">
+                        Data siswa belum tersedia. Siswa yang terdaftar akan muncul di sini.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                    <h3 className="text-base font-bold text-slate-900">Akses Cepat</h3>
+                    <p className="mt-1 text-xs text-slate-500">Buka area pengelolaan yang dibutuhkan.</p>
+                    <div className="mt-4 space-y-2">
+                      {[
+                        { tab: 'literasi' as const, icon: '📚', label: 'Kelola materi literasi', detail: `${passages.length} bacaan tersedia` },
+                        { tab: 'numerasi' as const, icon: '🔢', label: 'Kelola soal numerasi', detail: `${numeracyList.length} soal tersedia` },
+                        { tab: 'users' as const, icon: '👥', label: 'Pantau perkembangan siswa', detail: `${users.length} siswa terdata` },
+                      ].map((item) => (
+                        <button
+                          key={item.tab}
+                          type="button"
+                          onClick={() => setActiveTab(item.tab)}
+                          className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition-colors hover:border-teal-200 hover:bg-teal-50/50"
+                        >
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-lg">{item.icon}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-bold text-slate-800">{item.label}</span>
+                            <span className="mt-0.5 block text-[11px] text-slate-500">{item.detail}</span>
+                          </span>
+                          <span className="text-sm text-slate-400" aria-hidden="true">→</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
             {/* LITERASI TAB */}
             {activeTab === 'literasi' && (
               <div className="space-y-4">

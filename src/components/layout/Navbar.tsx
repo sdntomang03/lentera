@@ -5,6 +5,7 @@ import { soundFx } from '../../utils/audio';
 import { ENDZI_MASCOT_IMAGE } from '../../assets/mascot';
 
 export type NavItemKey =
+  | 'dashboard'
   | 'literasi'
   | 'numerasi'
   | 'tips'
@@ -37,6 +38,17 @@ interface NavItemConfig {
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
+  {
+    key: 'dashboard',
+    label: 'Dashboard',
+    shortLabel: 'Beranda',
+    icon: '🏠',
+    colorClass: {
+      active: 'bg-slate-800 text-white shadow-xs',
+      text: 'text-slate-700',
+      hover: 'hover:bg-slate-200 hover:text-slate-900',
+    },
+  },
   {
     key: 'literasi',
     label: 'Literasi Membaca',
@@ -144,7 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo & Brand Identity */}
           <button
-            onClick={() => handleNavClick('literasi')}
+            onClick={() => handleNavClick('dashboard')}
             className="flex items-center gap-1.5 sm:gap-2.5 text-left group cursor-pointer focus:outline-hidden shrink-0 min-w-0"
           >
             <div className="relative shrink-0">

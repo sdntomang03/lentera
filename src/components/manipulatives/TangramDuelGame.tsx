@@ -406,7 +406,11 @@ export const TangramDuelGame: React.FC = () => {
   };
 
   const currentShape = SHAPES[clamp(round, 1, SHAPES.length) - 1];
-  const winnerName = scores.t1 === scores.t2 ? null : scores.t1 > scores.t2 ? names.t1 : names.t2;
+  const teamNames = {
+    t1: names.t1.trim() || 'Tim Merah',
+    t2: names.t2.trim() || 'Tim Biru',
+  };
+  const winnerName = scores.t1 === scores.t2 ? null : scores.t1 > scores.t2 ? teamNames.t1 : teamNames.t2;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 space-y-5 shadow-xs">
@@ -428,7 +432,7 @@ export const TangramDuelGame: React.FC = () => {
               <input
                 value={names.t1}
                 maxLength={14}
-                onChange={(e) => setNames((n) => ({ ...n, t1: e.target.value || 'Tim Merah' }))}
+                onChange={(e) => setNames((n) => ({ ...n, t1: e.target.value }))}
                 className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </div>
@@ -437,7 +441,7 @@ export const TangramDuelGame: React.FC = () => {
               <input
                 value={names.t2}
                 maxLength={14}
-                onChange={(e) => setNames((n) => ({ ...n, t2: e.target.value || 'Tim Biru' }))}
+                onChange={(e) => setNames((n) => ({ ...n, t2: e.target.value }))}
                 className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -500,7 +504,7 @@ export const TangramDuelGame: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-4">
             <TeamBoard
               shape={currentShape}
-              teamLabel={`${names.t1} — ${scores.t1} poin`}
+              teamLabel={`${teamNames.t1} — ${scores.t1} poin`}
               accent="text-rose-600"
               locked={phase !== 'playing'}
               resetKey={resetTick}
@@ -508,7 +512,7 @@ export const TangramDuelGame: React.FC = () => {
             />
             <TeamBoard
               shape={currentShape}
-              teamLabel={`${names.t2} — ${scores.t2} poin`}
+              teamLabel={`${teamNames.t2} — ${scores.t2} poin`}
               accent="text-indigo-600"
               locked={phase !== 'playing'}
               resetKey={resetTick}
@@ -525,7 +529,7 @@ export const TangramDuelGame: React.FC = () => {
             <>
               <h4 className="text-2xl font-black text-slate-900">{winnerName} JUARA TANGRAM!</h4>
               <p className="text-sm text-slate-500">
-                Skor akhir: {names.t1} {scores.t1} - {scores.t2} {names.t2}
+                Skor akhir: {teamNames.t1} {scores.t1} - {scores.t2} {teamNames.t2}
               </p>
               <div className="text-3xl">🎊🎉✨🎊🎉</div>
             </>
@@ -533,7 +537,7 @@ export const TangramDuelGame: React.FC = () => {
             <>
               <h4 className="text-2xl font-black text-slate-900">SERI!</h4>
               <p className="text-sm text-slate-500">
-                Skor akhir: {names.t1} {scores.t1} - {scores.t2} {names.t2}. Sama-sama hebat!
+                Skor akhir: {teamNames.t1} {scores.t1} - {scores.t2} {teamNames.t2}. Sama-sama hebat!
               </p>
             </>
           )}

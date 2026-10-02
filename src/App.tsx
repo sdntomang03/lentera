@@ -14,6 +14,7 @@ import { DailyChallengeModal } from './components/common/DailyChallengeModal';
 import { DailyChallengeCard } from './components/common/DailyChallengeCard';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LoginView } from './components/auth/LoginView';
+import { StudentDashboard } from './components/dashboard/StudentDashboard';
 import { EndziChatBot } from './components/chat/EndziChatBot';
 import { LITERACY_PASSAGES } from './data/literacyData';
 import { NUMERACY_QUESTIONS } from './data/numeracyData';
@@ -33,6 +34,7 @@ import {
 } from './services/contentService';
 
 type ActiveNav =
+  | 'dashboard'
   | 'literasi'
   | 'numerasi'
   | 'tips'
@@ -43,6 +45,7 @@ type ActiveNav =
   | 'leaderboard';
 
 const NAV_LABELS: Record<ActiveNav, string> = {
+  dashboard: 'Dashboard',
   literasi: 'Literasi Membaca',
   numerasi: 'Numerasi AKM',
   tips: 'Tips Harian Belajar',
@@ -78,7 +81,7 @@ const defaultProgress: UserProgress = {
 };
 
 export default function App() {
-  const [activeNav, setActiveNav] = useState<ActiveNav>('literasi');
+  const [activeNav, setActiveNav] = useState<ActiveNav>('dashboard');
   const [navHistory, setNavHistory] = useState<ActiveNav[]>([]);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
 
@@ -237,6 +240,8 @@ export default function App() {
   const handleLoginSuccess = (nextSession: AuthSession, progressData?: UserProgress) => {
     setIsRestoringProgress(false);
     setSession(nextSession);
+    setActiveNav('dashboard');
+    setNavHistory([]);
     if (progressData) {
       setProgress({
         ...defaultProgress,
@@ -263,7 +268,7 @@ export default function App() {
       console.warn('Could not revoke the Database session:', error);
     });
     setSession(null);
-    setActiveNav('literasi');
+    setActiveNav('dashboard');
     setNavHistory([]);
     setIsChatOpen(false);
     if (typeof window !== 'undefined') {
@@ -315,7 +320,7 @@ export default function App() {
       setNavHistory((prev) => prev.slice(0, -1));
       setActiveNav(prevNav);
     } else {
-      setActiveNav('literasi');
+      setActiveNav('dashboard');
     }
   };
 
@@ -617,7 +622,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Quick Back & Navigation Breadcrumb Bar (Hidden on Print & on default view if no history) */}
-        {(activeNav !== 'literasi' || navHistory.length > 0) && (
+        {((activeNav !== 'dashboard' && activeNav !== 'literasi') || navHistory.length > 0) && (
           <div className="no-print mb-5 flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
             <button
               type="button"
@@ -655,6 +660,16 @@ export default function App() {
               onStartChallenge={handleStartDailyChallenge}
             />
           </div>
+        )}
+
+        {activeNav === 'dashboard' && (
+          <StudentDashboard
+            progress={progress}
+            passageCount={passages.length}
+            numeracyCount={numeracyQuestions.length}
+            onNavigate={handleNavSelect}
+            onStartChallenge={handleStartDailyChallenge}
+          />
         )}
 
         {activeNav === 'literasi' && (

@@ -150,49 +150,21 @@ export const NumeracyView: React.FC<NumeracyViewProps> = ({
                 </p>
               </div>
 
-              {/* Segmented Domain Filters */}
-              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar max-w-full">
-                <button
-                  onClick={() => setFilterDomain('all')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterDomain === 'all' ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                Domain:
+                <select
+                  aria-label="Filter domain numerasi"
+                  value={filterDomain}
+                  onChange={(event) => setFilterDomain(event.target.value as NumeracyDomain | 'all')}
+                  className="min-w-40 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-700 cursor-pointer"
                 >
-                  Semua Domain
-                </button>
-                <button
-                  onClick={() => setFilterDomain('bilangan')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterDomain === 'bilangan' ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Bilangan
-                </button>
-                <button
-                  onClick={() => setFilterDomain('geometri')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterDomain === 'geometri' ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Geometri
-                </button>
-                <button
-                  onClick={() => setFilterDomain('data')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterDomain === 'data' ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Data & Peluang
-                </button>
-                <button
-                  onClick={() => setFilterDomain('aljabar')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    filterDomain === 'aljabar' ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Aljabar & Pola
-                </button>
-              </div>
+                  <option value="all">Semua Domain</option>
+                  <option value="bilangan">Bilangan</option>
+                  <option value="geometri">Geometri</option>
+                  <option value="data">Data & Peluang</option>
+                  <option value="aljabar">Aljabar & Pola</option>
+                </select>
+              </label>
             </div>
 
             {/* Sub-level Filter */}
