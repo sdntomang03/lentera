@@ -206,7 +206,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
         <div className="w-full max-w-2xl bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
           {/* Card Hero Header */}
           <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-indigo-900 p-6 sm:p-8 text-white relative overflow-hidden">
-            <div className="relative z-10 flex items-center justify-between gap-4">
+            <div className="relative z-10 flex items-center gap-4">
+              <img
+                src={ENDZI_MASCOT_IMAGE}
+                alt="Endzi, burung enggang sahabat belajar"
+                className="hidden h-28 w-28 shrink-0 rounded-2xl border border-white/20 object-cover shadow-lg sm:block"
+              />
               <div className="min-w-0 space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-teal-200 text-xs font-bold">
                   <span>✨</span> Selamat Datang di Portal Pembelajaran
@@ -218,11 +223,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   Pilih akun Anda untuk melanjutkan petualangan membaca teks inspiratif, menyelesaikan tantangan numerasi, dan mengumpulkan bintang prestasi!
                 </p>
               </div>
-              <img
-                src={ENDZI_MASCOT_IMAGE}
-                alt="Endzi, burung enggang sahabat belajar"
-                className="hidden h-28 w-28 shrink-0 rounded-2xl border border-white/20 object-cover shadow-lg sm:block"
-              />
             </div>
 
             {/* Floating Background Icons */}
