@@ -557,8 +557,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
           {/* Card Footer */}
           <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-2">
-            <span>© Lentera Indonesia · Literasi & Numerasi Berkelanjutan</span>
-            <span className="font-semibold text-slate-600">Standar Asesmen Nasional (TKA)</span>
+            <span>© Lentera  · Literasi & Numerasi Berkelanjutan</span>
+            
           </div>
         </div>
       </main>
