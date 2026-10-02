@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
@@ -71,6 +72,89 @@ class StudentController extends Controller
         ]);
 
         return response()->json(['data' => $this->userPayload($user, true)], 201);
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
+
+        $request->validate([
+            'students' => ['required', 'array', 'list', 'min:1', 'max:100'],
+        ]);
+
+        $results = [];
+        foreach ($request->input('students') as $index => $student) {
+            $rowNumber = $index + 2;
+            if (! is_array($student)) {
+                $results[] = [
+                    'row' => $rowNumber,
+                    'status' => 'error',
+                    'message' => 'Data baris tidak valid.',
+                ];
+
+                continue;
+            }
+
+            if (is_string($student['username'] ?? null)) {
+                $student['username'] = mb_strtolower(trim($student['username']));
+            }
+            $validator = Validator::make($student, [
+                'studentName' => ['required', 'string', 'max:120'],
+                'username' => ['required', 'string', 'min:3', 'max:40', 'regex:/^[a-z0-9_-]+$/', 'unique:users,username'],
+                'password' => ['required', 'string', 'min:8', 'max:72'],
+                'gradeLevel' => ['nullable', 'string', 'max:80'],
+            ]);
+
+            if ($validator->fails()) {
+                $results[] = [
+                    'row' => $rowNumber,
+                    'username' => $student['username'] ?? null,
+                    'status' => 'error',
+                    'message' => $validator->errors()->first(),
+                ];
+
+                continue;
+            }
+
+            $data = $validator->validated();
+            $user = User::create([
+                'name' => trim($data['studentName']),
+                'username' => $data['username'],
+                'password' => $data['password'],
+                'role' => 'student',
+                'school_id' => $schoolId,
+                'teacher_id' => $request->user()->id,
+                'grade_level' => $data['gradeLevel'] ?? null,
+                'progress' => [
+                    'completedPassages' => [],
+                    'completedNumeracy' => [],
+                    'quizScores' => [],
+                    'earnedBadges' => [],
+                    'totalPoints' => 0,
+                    'streakCount' => 0,
+                    'longestStreak' => 0,
+                ],
+                'total_points' => 0,
+            ]);
+
+            $results[] = [
+                'row' => $rowNumber,
+                'username' => $user->username,
+                'status' => 'created',
+                'studentId' => (string) $user->id,
+            ];
+        }
+
+        $imported = count(array_filter($results, fn (array $result): bool => $result['status'] === 'created'));
+
+        return response()->json([
+            'data' => [
+                'imported' => $imported,
+                'failed' => count($results) - $imported,
+                'results' => $results,
+            ],
+        ]);
     }
 
     public function storeTeacher(Request $request): JsonResponse

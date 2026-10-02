@@ -64,11 +64,14 @@ Semua endpoint aplikasi menggunakan prefix `/api/v1`.
 | `POST`, `PUT`, `DELETE`        | `/content/{type}[/{id}]`                  | Guru                                |
 | `GET`, `PUT`                   | `/me/progress`                            | Siswa pemilik akun                  |
 | `GET`, `POST`, `PUT`, `DELETE` | `/admin/students[/{id}]`                  | Guru                                |
+| `POST`                         | `/admin/students/import`                  | Guru; maksimum 100 siswa per batch  |
 | `GET`, `PUT`                   | `/settings`                               | Token sekolah; PUT guru              |
 | `GET`                          | `/leaderboard`                            | Token; papan peringkat sekolah      |
 | `GET`, `POST`, `PUT`           | `/platform/schools[/{id}]`                | Admin Platform                      |
 
 Endpoint terautentikasi menggunakan header `Authorization: Bearer <token>`. Password disimpan dengan hash Laravel; token API dikelola oleh Sanctum.
+
+Guru dapat mengimpor daftar siswa dari file `.xlsx` atau `.csv` melalui tab Siswa pada Ruang Kerja Guru. Unduh template CSV dari panel, isi kolom `Nama Siswa`, `Username`, `Password`, dan `Kelas/Fase`, lalu unggah berkasnya. Username harus unik dan kata sandi awal minimal 8 karakter. Maksimal 100 siswa per unggahan; baris valid disimpan dan baris yang gagal menampilkan nomor serta alasan agar dapat diperbaiki. Simpan kolom username dan password sebagai teks di Excel agar nol di depan tidak hilang.
 
 Gunakan HTTPS saat deployment. Perhitungan skor masih berasal dari aplikasi frontend dan disimpan oleh API, sehingga leaderboard belum cocok untuk penilaian berisiko tinggi tanpa validasi jawaban dan pemberian skor di server.
 

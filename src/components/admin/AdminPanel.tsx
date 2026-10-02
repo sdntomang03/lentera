@@ -38,6 +38,12 @@ import { soundFx } from '../../utils/audio';
 import { generateLiteracyPassage, generateNumeracyQuestion } from '../../services/aiContentService';
 import { createSchoolTeacher, fetchSchoolTeachers, SchoolTeacherAccount } from '../../services/authService';
 import { ApiError } from '../../services/apiClient';
+import {
+  downloadStudentImportTemplate,
+  importStudents,
+  parseStudentImportFile,
+  StudentImportResponse,
+} from '../../services/studentImportService';
 
 export interface TrashItem {
   id: string;
@@ -58,6 +64,15 @@ interface AdminPanelProps {
 }
 
 const AVATAR_OPTIONS = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '⭐', '📚', '🎨', '🌟', '🦁'];
+const DEFAULT_STUDENT_GRADE_LEVEL = SUPPORTED_GRADE_LEVEL_OPTIONS[1];
+
+function normalizeGradeLevel(gradeLevel: string | undefined): string {
+  const normalized = gradeLevel?.toLowerCase() ?? '';
+  if (normalized.includes('fase a')) return SUPPORTED_GRADE_LEVEL_OPTIONS[0];
+  if (normalized.includes('fase b')) return SUPPORTED_GRADE_LEVEL_OPTIONS[1];
+  if (normalized.includes('fase c')) return SUPPORTED_GRADE_LEVEL_OPTIONS[2];
+  return DEFAULT_STUDENT_GRADE_LEVEL;
+}
 
 interface ReadingPracticeDraft {
   id: string;
@@ -109,6 +124,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [showTeacherForm, setShowTeacherForm] = useState(false);
   const [teacherDraft, setTeacherDraft] = useState({ teacherName: '', username: '', password: '' });
   const [isSavingTeacher, setIsSavingTeacher] = useState(false);
+  const [isImportingStudents, setIsImportingStudents] = useState(false);
+  const [studentImportResult, setStudentImportResult] = useState<StudentImportResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [actionNotice, setActionNotice] = useState<string>('');
   const [actionError, setActionError] = useState<string>('');
@@ -164,7 +181,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     username: '',
     password: '',
     school: '',
-    gradeLevel: 'Kelas 4 (Fase B)',
+    gradeLevel: DEFAULT_STUDENT_GRADE_LEVEL,
     avatar: '👦',
     initialPoints: 120,
   });
@@ -260,6 +277,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showError(error instanceof Error ? `Gagal membuat akun guru: ${error.message}` : 'Gagal membuat akun guru.');
     } finally {
       setIsSavingTeacher(false);
+    }
+  };
+
+  const handleImportStudents = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setIsImportingStudents(true);
+    setStudentImportResult(null);
+    try {
+      const rows = await parseStudentImportFile(file);
+      const result = await importStudents(rows);
+      setStudentImportResult(result);
+      await loadData();
+      if (result.failed === 0) {
+        showNotification(`${result.imported} akun siswa berhasil diimpor.`);
+      } else {
+        showNotification(`${result.imported} siswa berhasil diimpor; ${result.failed} baris perlu diperbaiki.`);
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'File siswa gagal diimpor.');
+    } finally {
+      setIsImportingStudents(false);
     }
   };
 
@@ -878,7 +919,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       username: '',
       password: '',
       school: adminConfig.schoolName || 'SD Negeri Nusantara',
-      gradeLevel: 'Kelas 4 (Fase B)',
+      gradeLevel: DEFAULT_STUDENT_GRADE_LEVEL,
       avatar: '👦',
       initialPoints: 120,
     });
@@ -940,7 +981,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleEditUser = (user: UserProgress) => {
     soundFx.playClick();
-    setEditingUser(JSON.parse(JSON.stringify(user)));
+    setEditingUser({
+      ...JSON.parse(JSON.stringify(user)),
+      gradeLevel: normalizeGradeLevel(user.gradeLevel),
+    });
     setIsUserEditorOpen(true);
   };
 
@@ -2043,6 +2087,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     ))}
                   </div>
                 </section>
+
+                {teacherWorkspace && (
+                  <section className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs sm:p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h2 className="text-sm font-bold text-slate-900">Impor Siswa dari Excel</h2>
+                        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+                          Unggah .xlsx atau .csv dengan kolom Nama Siswa, Username, Password, dan Kelas/Fase.
+                          Maksimal 100 siswa per file; akun siswa akan menjadi milik Anda.
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={downloadStudentImportTemplate}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          Unduh Template
+                        </button>
+                        <label className={`cursor-pointer rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 ${isImportingStudents ? 'pointer-events-none opacity-60' : ''}`}>
+                          {isImportingStudents ? 'Mengimpor...' : 'Pilih File'}
+                          <input
+                            type="file"
+                            accept=".xlsx,.csv"
+                            onChange={handleImportStudents}
+                            disabled={isImportingStudents}
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    {studentImportResult && (
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-xs font-bold text-slate-800">
+                          Hasil: {studentImportResult.imported} berhasil, {studentImportResult.failed} gagal.
+                        </p>
+                        {studentImportResult.failed > 0 && (
+                          <ul className="mt-2 max-h-36 space-y-1 overflow-y-auto text-xs text-rose-700">
+                            {studentImportResult.results
+                              .filter((result) => result.status === 'error')
+                              .map((result) => (
+                                <li key={`${result.row}-${result.username || 'baris'}`}>
+                                  Baris {result.row}{result.username ? ` (${result.username})` : ''}: {result.message}
+                                </li>
+                              ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 text-xs text-slate-600">
                   <div className="flex items-center gap-4">
@@ -3266,9 +3361,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     onChange={(e) => setNewStudentForm({ ...newStudentForm, gradeLevel: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
                   >
-                    <option value="Kelas 1-2 (Fase A)">Kelas 1-2 (Fase A)</option>
-                    <option value="Kelas 3-4 (Fase B)">Kelas 3-4 (Fase B)</option>
-                    <option value="Kelas 5-6 (Fase C)">Kelas 5-6 (Fase C)</option>
+                    {SUPPORTED_GRADE_LEVEL_OPTIONS.map((gradeLevel) => (
+                      <option key={gradeLevel} value={gradeLevel}>
+                        {gradeLevel}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
