@@ -515,7 +515,9 @@ export const MathOperationsPractice: React.FC = () => {
                   ))}
                   {operation === 'multiplication' && example.partialProducts.map((partial, index) => (
                     <React.Fragment key={`partial-${index}`}>
-                      <span />
+                      <span className="flex h-8 items-center justify-center text-lg font-bold text-slate-600">
+                        {index > 0 ? '+' : ''}
+                      </span>
                       {String(partial).padStart(example.columnCount, ' ').split('').map((digit, digitIndex) => (
                         <span key={digitIndex} className="flex h-8 items-center justify-center text-lg font-bold text-slate-600">
                           {digit.trim()}
@@ -582,7 +584,7 @@ export const MathOperationsPractice: React.FC = () => {
                     {Array.from({ length: String(problem.first).length - resultDigits.length }, (_, index) => (
                       <span key={`quotient-space-${index}`} />
                     ))}
-                    {renderAnswerCells().map((cell, index) => React.cloneElement(cell, { key: `division-answer-${index}`, className: 'flex h-14 items-center justify-center' }))}
+                    {renderAnswerCells()}
                     <span className="col-span-2 flex items-center justify-center text-xl font-black text-slate-800">{problem.second}</span>
                     <div
                       className="grid border-l-2 border-t-2 border-slate-700 pl-1"
@@ -592,12 +594,12 @@ export const MathOperationsPractice: React.FC = () => {
                         <span key={`dividend-${index}`} className="flex h-12 items-center justify-center text-2xl font-black text-slate-800">{digit}</span>
                       ))}
                     </div>
-                    <span className="col-span-2" />
-                    <div className="border-b-2 border-dashed border-slate-300" style={{ gridColumn: `span ${String(problem.first).length}` }} />
-                    <span className="col-span-2" />
-                    <div className="border-b-2 border-dashed border-slate-300" style={{ gridColumn: `span ${String(problem.first).length}` }} />
-                    <span className="col-span-2" />
-                    <div className="border-b-2 border-dashed border-slate-300" style={{ gridColumn: `span ${String(problem.first).length}` }} />
+                    {Array.from({ length: String(problem.first).length * 3 }, (_, index) => (
+                      <React.Fragment key={`division-workspace-${index}`}>
+                        <span className="col-span-2" />
+                        <div className="h-7 border-b-2 border-dashed border-slate-300" style={{ gridColumn: `span ${String(problem.first).length}` }} />
+                      </React.Fragment>
+                    ))}
                   </div>
                   <p className="mt-3 text-center text-xs text-slate-500">Kerjakan porogapit dari kiri ke kanan, lalu turunkan angka berikutnya.</p>
                 </div>
@@ -615,8 +617,11 @@ export const MathOperationsPractice: React.FC = () => {
                       <div key={`partial-work-${index}`} className="mt-2">
                         <p className="text-right text-[10px] font-semibold text-slate-500">Hasil kali {multiplierPlace} ({digit})</p>
                         <div className="flex justify-end">
+                          <span className="flex w-7 items-center justify-center text-lg font-bold text-slate-500">{index > 0 ? '+' : ''}</span>
                           <div className="grid" style={{ gridTemplateColumns: `repeat(${maxDigits}, minmax(2.25rem, 1fr))` }}>
-                            {Array.from({ length: maxDigits - partialLength }, (_, blankIndex) => <span key={`blank-${blankIndex}`} />)}
+                            {Array.from({ length: maxDigits - partialLength }, (_, blankIndex) => (
+                              <span key={`blank-${blankIndex}`} />
+                            ))}
                             {Array.from({ length: partialLength }, (_, digitIndex) => (
                               <span key={digitIndex} className="m-1 h-9 rounded-md border border-dashed border-slate-300 bg-white/70" />
                             ))}
@@ -678,7 +683,13 @@ export const MathOperationsPractice: React.FC = () => {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-bold text-amber-900">Bantuan bersusun pendek</h3>
-                <p className="mt-1 text-xs text-slate-500">Kerjakan kolom demi kolom dari kanan.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {problem.operation === 'division'
+                    ? 'Bagi dari kiri ke kanan, kurangi, lalu turunkan angka berikutnya.'
+                    : problem.operation === 'multiplication'
+                      ? 'Kalikan dari satuan, lanjutkan ke puluhan, lalu jumlahkan hasil tiap baris.'
+                      : 'Kerjakan kolom demi kolom dari kanan.'}
+                </p>
               </div>
               <span className="text-xl">💡</span>
             </div>
