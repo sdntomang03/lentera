@@ -268,6 +268,15 @@ export default function App() {
     }
   };
 
+  const handleTeacherNameChanged = (name: string) => {
+    setSession((currentSession) => {
+      if (!currentSession || currentSession.role !== 'teacher') return currentSession;
+      const updatedSession = { ...currentSession, studentName: name };
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(updatedSession));
+      return updatedSession;
+    });
+  };
+
   const handleLogout = () => {
     void logoutFromApi().catch((error) => {
       console.warn('Could not revoke the Database session:', error);
@@ -612,6 +621,8 @@ export default function App() {
         onClose={handleLogout}
         isTeacher
         teacherWorkspace
+        teacherName={session.studentName}
+        onTeacherNameChanged={handleTeacherNameChanged}
       />
     );
   }

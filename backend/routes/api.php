@@ -25,6 +25,7 @@ Route::prefix('v1')->group(function (): void {
                 ->whereIn('type', ['passages', 'questions', 'reading-practice']);
 
             Route::middleware('teacher')->group(function (): void {
+                Route::put('/me/profile', [SettingController::class, 'updateOwnProfile']);
                 Route::post('/content/{type}', [ContentController::class, 'store'])
                     ->whereIn('type', ['passages', 'questions', 'reading-practice']);
                 Route::put('/content/{type}/{id}', [ContentController::class, 'update'])

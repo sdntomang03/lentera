@@ -69,6 +69,14 @@ export async function login(username: string, password: string, role: AuthSessio
   return toAuthResult(response);
 }
 
+export async function updateTeacherName(name: string): Promise<string> {
+  const response = await apiRequest<{ data: { name: string } }>('/me/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+  return response.data.name;
+}
+
 export async function registerStudent(data: {
   studentName: string;
   username: string;

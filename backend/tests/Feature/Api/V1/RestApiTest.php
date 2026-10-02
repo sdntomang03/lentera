@@ -386,6 +386,34 @@ class RestApiTest extends TestCase
             ->assertJsonPath('data.teacherName', 'Guru Uji');
     }
 
+    public function test_teacher_can_update_only_their_own_profile_name(): void
+    {
+        $school = $this->createSchool();
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'school_id' => $school->id,
+            'name' => 'Nama Lama',
+        ]);
+        $colleague = User::factory()->create([
+            'role' => 'teacher',
+            'school_id' => $school->id,
+            'name' => 'Nama Rekan',
+        ]);
+
+        $this->actingAs($teacher)->putJson('/api/v1/me/profile', [
+            'name' => '  Nama Baru  ',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'Nama Baru');
+
+        $this->assertDatabaseHas('users', ['id' => $teacher->id, 'name' => 'Nama Baru']);
+        $this->assertDatabaseHas('users', ['id' => $colleague->id, 'name' => 'Nama Rekan']);
+        $this->assertDatabaseHas('schools', ['id' => $school->id, 'name' => $school->name]);
+
+        $student = User::factory()->create(['school_id' => $school->id]);
+        $this->actingAs($student)->putJson('/api/v1/me/profile', ['name' => 'Bukan Guru'])
+            ->assertForbidden();
+    }
+
     public function test_teachers_only_access_their_students_and_school_content(): void
     {
         $schoolA = $this->createSchool();

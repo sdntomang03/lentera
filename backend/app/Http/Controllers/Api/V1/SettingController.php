@@ -11,6 +11,17 @@ use Illuminate\Validation\Rule;
 
 class SettingController extends Controller
 {
+    public function updateOwnProfile(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+        $user = $request->user();
+        $user->update(['name' => trim($data['name'])]);
+
+        return response()->json(['data' => ['name' => $user->name]]);
+    }
+
     public function show(Request $request): JsonResponse
     {
         $school = $request->user()?->school;

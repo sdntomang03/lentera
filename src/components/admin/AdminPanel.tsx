@@ -36,7 +36,7 @@ import {
 } from '../../services/contentService';
 import { soundFx } from '../../utils/audio';
 import { generateLiteracyPassage, generateNumeracyQuestion } from '../../services/aiContentService';
-import { createSchoolTeacher, fetchSchoolTeachers, SchoolTeacherAccount } from '../../services/authService';
+import { createSchoolTeacher, fetchSchoolTeachers, SchoolTeacherAccount, updateTeacherName } from '../../services/authService';
 import { ApiError } from '../../services/apiClient';
 import {
   downloadStudentImportTemplate,
@@ -59,6 +59,8 @@ interface AdminPanelProps {
   onClose: () => void;
   isTeacher: boolean;
   teacherWorkspace?: boolean;
+  teacherName?: string;
+  onTeacherNameChanged?: (name: string) => void;
   currentStudentName?: string;
   onSelectStudentProfile?: (student: UserProgress) => void;
 }
@@ -99,6 +101,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onClose,
   isTeacher,
   teacherWorkspace = false,
+  teacherName,
+  onTeacherNameChanged,
   currentStudentName,
   onSelectStudentProfile,
 }) => {
@@ -188,7 +192,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Settings form state
   const [newSchoolName, setNewSchoolName] = useState<string>('');
-  const [newTeacherName, setNewTeacherName] = useState<string>('');
+  const [newTeacherName, setNewTeacherName] = useState<string>(teacherName || '');
 
   // Custom In-App Confirmation Dialog with explicit Ya / Tidak
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -1163,6 +1167,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleSaveTeacherProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newTeacherName.trim();
+    if (!name) {
+      showError('Nama guru tidak boleh kosong.');
+      return;
+    }
+
+    try {
+      const savedName = await updateTeacherName(name);
+      setNewTeacherName(savedName);
+      setAdminConfig((config) => ({ ...config, teacherName: savedName }));
+      onTeacherNameChanged?.(savedName);
+      soundFx.playCorrect();
+      showNotification('Nama profil guru berhasil diperbarui.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Terjadi kesalahan yang tidak diketahui.';
+      showError(`Gagal memperbarui nama profil: ${message}`);
+    }
+  };
+
   // Filtered lists
   const filteredPassages = passages.filter((p) => {
     const matchesSearch =
@@ -1383,7 +1408,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            🏫 Sekolah & Guru
+            {teacherWorkspace ? '👤 Profil Guru' : '🏫 Sekolah & Guru'}
           </button>
         </div>
 
@@ -1509,7 +1534,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         )}
 
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && !teacherWorkspace && (
           <button
             onClick={handleResetDefaults}
             className="px-3.5 py-1.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -2431,6 +2456,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             {/* SETTINGS TAB */}
             {activeTab === 'settings' && (
+              teacherWorkspace ? (
+                <div className="max-w-xl mx-auto bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-xs">
+                  <div className="space-y-1">
+                    <h2 className="text-xl font-bold text-slate-900">Profil Guru</h2>
+                    <p className="text-xs text-slate-500">
+                      Ubah nama yang ditampilkan pada akun dan ruang kerja guru. Username login tidak berubah.
+                    </p>
+                  </div>
+                  <form onSubmit={handleSaveTeacherProfile} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Nama Anda:</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={120}
+                        value={newTeacherName}
+                        onChange={(event) => setNewTeacherName(event.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                      />
+                    </div>
+                    <div className="pt-4 border-t border-slate-100 flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 rounded-xl bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs shadow-xs cursor-pointer"
+                      >
+                        Simpan Nama
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
               <div className="max-w-xl mx-auto bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-xs">
                 <div className="space-y-1">
                   <h2 className="text-xl font-bold text-slate-900">Pengaturan Identitas Sekolah & Guru</h2>
@@ -2474,6 +2530,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </form>
               </div>
+              )
             )}
           </>
         )}
