@@ -116,15 +116,18 @@ class RestApiTest extends TestCase
 
         $studentId = $created->json('data.id');
         $this->putJson('/api/v1/admin/students/'.$studentId, [
+            'studentName' => '  Nama Siswa Diperbarui  ',
             'username' => 'SISWA_BARU',
             'gradeLevel' => 'Fase A (Kelas 1-2 SD)',
             'progress' => ['totalPoints' => 80],
         ])->assertOk()
+            ->assertJsonPath('data.studentName', 'Nama Siswa Diperbarui')
             ->assertJsonPath('data.username', 'siswa_baru')
             ->assertJsonPath('data.gradeLevel', 'Fase A (Kelas 1-2 SD)');
 
         $this->assertDatabaseHas('users', [
             'id' => $studentId,
+            'name' => 'Nama Siswa Diperbarui',
             'username' => 'siswa_baru',
             'teacher_id' => $teacher->id,
             'grade_level' => 'Fase A (Kelas 1-2 SD)',

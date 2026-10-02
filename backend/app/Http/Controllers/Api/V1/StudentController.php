@@ -225,7 +225,7 @@ class StudentController extends Controller
             $request->merge(['username' => mb_strtolower(trim($request->input('username')))]);
         }
         $data = $request->validate([
-            'studentName' => ['sometimes', 'string', 'max:120'],
+            'studentName' => ['sometimes', 'required', 'string', 'max:120'],
             'username' => ['sometimes', 'required', 'string', 'min:3', 'max:40', 'regex:/^[a-z0-9_-]+$/', Rule::unique('users', 'username')->ignore($user->id)],
             'gradeLevel' => ['nullable', 'string', 'max:80'],
             'avatar' => ['nullable', 'string', 'max:32'],
@@ -241,7 +241,7 @@ class StudentController extends Controller
             ]));
         }
         if (array_key_exists('studentName', $data)) {
-            $data['name'] = $data['studentName'];
+            $data['name'] = trim($data['studentName']);
             unset($data['studentName']);
         }
         if (array_key_exists('gradeLevel', $data)) {

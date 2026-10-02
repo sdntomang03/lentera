@@ -996,7 +996,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     try {
-      const fullUser = editingUser as UserProgress;
+      const fullUser = {
+        ...editingUser,
+        studentName: editingUser.studentName.trim(),
+      } as UserProgress;
+      if (!fullUser.studentName) {
+        showError('Nama siswa tidak boleh kosong.');
+        return;
+      }
+      const previousStudentName = users.find((user) => user.id === fullUser.id)?.studentName;
       await saveUserToApi(fullUser);
       soundFx.playCorrect();
       confetti({ particleCount: 50, spread: 60 });
@@ -1004,7 +1012,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setIsUserEditorOpen(false);
       setEditingUser(null);
       await loadData();
-      if (currentStudentName === fullUser.studentName && onSelectStudentProfile) {
+      if (currentStudentName === previousStudentName && onSelectStudentProfile) {
         onSelectStudentProfile(fullUser);
       }
     } catch (err) {
