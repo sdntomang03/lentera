@@ -51,25 +51,31 @@ function randomInteger(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function genQuestion(operations: Operation[], digitCount: number): Question {
+function genQuestion(operations: Operation[], firstDigitCount: number, secondDigitCount: number): Question {
   const op = operations[randomInteger(0, operations.length - 1)];
-  const maxOperand = 10 ** digitCount - 1;
+  const minFirstOperand = 10 ** (firstDigitCount - 1);
+  const maxFirstOperand = 10 ** firstDigitCount - 1;
+  const minSecondOperand = 10 ** (secondDigitCount - 1);
+  const maxSecondOperand = 10 ** secondDigitCount - 1;
   let a: number;
   let b: number;
   let answer: number;
 
   if (op === '÷') {
-    b = randomInteger(1, maxOperand);
-    const maxQuotient = Math.max(1, Math.floor(maxOperand / b));
-    answer = randomInteger(1, maxQuotient);
+    const maxValidDivisor = Math.min(maxSecondOperand, maxFirstOperand);
+    b = randomInteger(minSecondOperand, maxValidDivisor);
+    const minQuotient = Math.max(1, Math.ceil(minFirstOperand / b));
+    const maxQuotient = Math.floor(maxFirstOperand / b);
+    answer = randomInteger(minQuotient, maxQuotient);
     a = b * answer;
   } else if (op === '-') {
-    a = randomInteger(2, maxOperand);
-    b = randomInteger(1, a - 1);
+    a = randomInteger(Math.max(minFirstOperand, minSecondOperand + 1), maxFirstOperand);
+    const maxValidSecond = Math.min(maxSecondOperand, a - 1);
+    b = randomInteger(minSecondOperand, maxValidSecond);
     answer = a - b;
   } else {
-    a = randomInteger(1, maxOperand);
-    b = randomInteger(1, maxOperand);
+    a = randomInteger(minFirstOperand, maxFirstOperand);
+    b = randomInteger(minSecondOperand, maxSecondOperand);
     answer = op === '+' ? a + b : a * b;
   }
 
@@ -87,7 +93,8 @@ export const MathDuelGame: React.FC = () => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const [names, setNames] = useState({ p1: 'Pemain 1', p2: 'Pemain 2' });
   const [selectedOperations, setSelectedOperations] = useState<Operation[]>(['+', '-']);
-  const [digitCount, setDigitCount] = useState(2);
+  const [firstDigitCount, setFirstDigitCount] = useState(2);
+  const [secondDigitCount, setSecondDigitCount] = useState(2);
   const [questionCount, setQuestionCount] = useState(8);
   const [setupError, setSetupError] = useState('');
   const [fullscreenError, setFullscreenError] = useState('');
@@ -130,6 +137,14 @@ export const MathDuelGame: React.FC = () => {
   const startGame = () => {
     if (selectedOperations.length === 0) {
       setSetupError('Pilih minimal satu operasi hitung.');
+      return;
+    }
+    if (selectedOperations.includes('-') && firstDigitCount < secondDigitCount) {
+      setSetupError('Untuk pengurangan, banyak digit angka 1 harus sama atau lebih besar daripada angka 2.');
+      return;
+    }
+    if (selectedOperations.includes('÷') && firstDigitCount < secondDigitCount) {
+      setSetupError('Untuk pembagian, banyak digit angka 1 harus sama atau lebih besar daripada angka 2.');
       return;
     }
     if (!Number.isInteger(questionCount) || questionCount < 1 || questionCount > 50) {
@@ -179,7 +194,7 @@ export const MathDuelGame: React.FC = () => {
 
   const beginQuestion = (roundNum: number) => {
     clearTimers();
-    setQuestion(genQuestion(selectedOperations, digitCount));
+    setQuestion(genQuestion(selectedOperations, firstDigitCount, secondDigitCount));
     setLocked({ p1: false, p2: false });
     setTimeLeft(ROUND_SECONDS);
     setPhase('question');
@@ -430,21 +445,39 @@ export const MathDuelGame: React.FC = () => {
 
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="duel-digit-count" className="text-xs font-bold text-slate-700">
-                Banyak digit pada angka
+              <label htmlFor="duel-first-digit-count" className="text-xs font-bold text-slate-700">
+                Banyak digit pada angka 1
               </label>
               <select
-                id="duel-digit-count"
-                value={digitCount}
-                onChange={(event) => setDigitCount(Number(event.target.value))}
+                id="duel-first-digit-count"
+                value={firstDigitCount}
+                onChange={(event) => setFirstDigitCount(Number(event.target.value))}
                 className="w-full mt-1 px-4 py-3 rounded-xl border border-slate-300 bg-white font-bold text-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 {[1, 2, 3, 4, 5].map((digits) => (
                   <option key={digits} value={digits}>{digits} digit</option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-slate-500">Setiap angka soal maksimal {10 ** digitCount - 1}.</p>
+              <p className="mt-1 text-[11px] text-slate-500">Bilangan dari {10 ** (firstDigitCount - 1)} sampai {10 ** firstDigitCount - 1}.</p>
             </div>
+            <div>
+              <label htmlFor="duel-second-digit-count" className="text-xs font-bold text-slate-700">
+                Banyak digit pada angka 2
+              </label>
+              <select
+                id="duel-second-digit-count"
+                value={secondDigitCount}
+                onChange={(event) => setSecondDigitCount(Number(event.target.value))}
+                className="w-full mt-1 px-4 py-3 rounded-xl border border-slate-300 bg-white font-bold text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {[1, 2, 3, 4, 5].map((digits) => (
+                  <option key={digits} value={digits}>{digits} digit</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-slate-500">Bilangan dari {10 ** (secondDigitCount - 1)} sampai {10 ** secondDigitCount - 1}.</p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="duel-question-count" className="text-xs font-bold text-slate-700">
                 Banyak soal
