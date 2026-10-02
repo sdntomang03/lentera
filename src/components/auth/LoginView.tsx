@@ -5,6 +5,7 @@ import { fetchAdminPortalConfig, AdminPortalConfig } from '../../services/conten
 import { login, registerStudent } from '../../services/authService';
 import { soundFx } from '../../utils/audio';
 import { getTodayDateString } from '../../utils/streak';
+import { ENDZI_MASCOT_IMAGE } from '../../assets/mascot';
 
 interface LoginViewProps {
   onLoginSuccess: (session: AuthSession, progressData?: UserProgress) => void;
@@ -177,14 +178,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
       {/* Top Header Bar */}
       <header className="w-full border-b border-white/10 px-4 sm:px-8 py-4 backdrop-blur-md bg-slate-900/50 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-teal-800 text-white flex items-center justify-center text-xl shadow-lg shadow-teal-900/40">
-            🏮
-          </div>
+          <img
+            src={ENDZI_MASCOT_IMAGE}
+            alt="Endzi, maskot Lentera"
+            className="w-11 h-11 rounded-2xl object-cover border border-white/20 shadow-lg shadow-teal-900/40"
+          />
           <div>
             <h1 className="text-base font-black tracking-tight text-white flex items-center gap-2">
               Lentera
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-900/80 text-teal-200 border border-teal-700/50">
-                AKM & Kurikulum Merdeka
+                Literasi & Numerasi
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">
