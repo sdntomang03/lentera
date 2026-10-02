@@ -80,6 +80,23 @@ const defaultProgress: UserProgress = {
 export default function App() {
   const [activeNav, setActiveNav] = useState<ActiveNav>('literasi');
   const [navHistory, setNavHistory] = useState<ActiveNav[]>([]);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isAboutOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsAboutOpen(false);
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAboutOpen]);
 
   // Authentication session state (Student or Teacher)
   const [session, setSession] = useState<AuthSession | null>(() => {
@@ -732,8 +749,81 @@ export default function App() {
           <p>
             Sesuai Standar Asesmen Kompetensi Minimum (AKM) & Kurikulum Merdeka Kemendikbudristek RI
           </p>
+          <button
+            type="button"
+            onClick={() => setIsAboutOpen(true)}
+            className="mt-2 inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-4 py-2 font-bold text-teal-800 transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:bg-teal-100 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+          >
+            <span aria-hidden="true">ℹ️</span>
+            Tentang Lentera
+          </button>
         </div>
       </footer>
+
+      {isAboutOpen && (
+        <div
+          className="about-overlay no-print fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          onClick={() => setIsAboutOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="about-title"
+            className="about-card relative w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-teal-500 via-emerald-400 to-indigo-600" />
+            <button
+              type="button"
+              onClick={() => setIsAboutOpen(false)}
+              aria-label="Tutup tentang Lentera"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/30 focus:outline-none focus:ring-2 focus:ring-white"
+            >
+              ✕
+            </button>
+
+            <div className="about-hero relative isolate overflow-hidden bg-gradient-to-br from-teal-800 via-teal-900 to-indigo-900 px-7 pb-8 pt-10 text-center text-white">
+              <span aria-hidden="true" className="about-orb about-orb-one" />
+              <span aria-hidden="true" className="about-orb about-orb-two" />
+              <span aria-hidden="true" className="about-spark about-spark-one">✦</span>
+              <span aria-hidden="true" className="about-spark about-spark-two">✧</span>
+              <div className="about-lantern relative z-10 mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/20 bg-white/10 text-4xl shadow-lg">
+                <span className="about-lantern-glow" />
+                <span className="relative">🏮</span>
+              </div>
+              <p className="about-copy about-copy-one relative z-10 mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-200">
+                Tentang Aplikasi
+              </p>
+              <h2 id="about-title" className="about-copy about-copy-two relative z-10 text-3xl font-black tracking-tight">
+                Lentera
+              </h2>
+              <p className="about-copy about-copy-three relative z-10 mt-2 text-sm leading-relaxed text-teal-100">
+                Media Pembelajaran Literasi & Numerasi Terpadu
+              </p>
+            </div>
+
+            <div className="about-details space-y-4 px-7 py-6 text-center">
+              <p className="text-sm leading-relaxed text-slate-600">
+                Ruang belajar interaktif untuk mendukung kegiatan literasi dan numerasi siswa.
+              </p>
+              <div className="about-author-card rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-emerald-50 px-5 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">
+                  Dibuat oleh
+                </p>
+                <p className="mt-1 text-lg font-black text-slate-900">Asnaeni</p>
+                <p className="text-sm font-semibold text-slate-600">SD Negeri 007 Nunukan</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAboutOpen(false)}
+                className="w-full rounded-xl bg-teal-800 px-5 py-3 text-sm font-bold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-teal-900 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+              >
+                Mulai Belajar
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Maskot AI Burung Enggang 'Endzi' Chatbot Widget */}
       <EndziChatBot
