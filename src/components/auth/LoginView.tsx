@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { UserProgress, AuthSession, SUPPORTED_GRADE_LEVEL_OPTIONS } from '../../types';
-import { fetchAdminPortalConfig, AdminPortalConfig } from '../../services/contentService';
-import { login, registerStudent } from '../../services/authService';
+import { login, registerStudent, lookupSchool } from '../../services/authService';
 import { soundFx } from '../../utils/audio';
 import { getTodayDateString } from '../../utils/streak';
 import { ENDZI_MASCOT_IMAGE } from '../../assets/mascot';
@@ -16,7 +15,7 @@ const AVATAR_LIST = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '�
 export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
 }) => {
-  const [roleTab, setRoleTab] = useState<'student' | 'teacher'>('student');
+  const [roleTab, setRoleTab] = useState<'student' | 'teacher' | 'platform-admin'>('student');
   const [studentMode, setStudentMode] = useState<'select' | 'register'>('select');
 
   const [studentUsername, setStudentUsername] = useState<string>('');
@@ -24,11 +23,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [studentLoginError, setStudentLoginError] = useState<string>('');
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
-  // Admin / Teacher config & login
-  const [adminConfig, setAdminConfig] = useState<AdminPortalConfig>({
-    schoolName: 'SD Negeri Nusantara',
-    teacherName: 'Guru Penggerak',
-  });
   const [teacherPinInput, setTeacherPinInput] = useState<string>('');
   const [teacherUsername, setTeacherUsername] = useState<string>('');
   const [teacherPinError, setTeacherPinError] = useState<string>('');
@@ -37,22 +31,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
   // New student registration form
   const [newStudentName, setNewStudentName] = useState<string>('');
   const [newStudentUsername, setNewStudentUsername] = useState<string>('');
-  const [newSchool, setNewSchool] = useState<string>('');
+  const [newTeacherUsername, setNewTeacherUsername] = useState<string>('');
+  const [newSchoolCode, setNewSchoolCode] = useState<string>('');
   const [newGradeLevel, setNewGradeLevel] = useState<string>('Fase B (Kelas 3-4 SD)');
   const [newAvatar, setNewAvatar] = useState<string>('👦');
   const [newStudentPassword, setNewStudentPassword] = useState<string>('');
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [registerError, setRegisterError] = useState<string>('');
-
-  // Load the public portal settings on mount.
-  useEffect(() => {
-    fetchAdminPortalConfig()
-      .then((cfg) => {
-        setAdminConfig(cfg);
-        setNewSchool(cfg.schoolName);
-      })
-      .catch((error) => console.warn('Could not load portal settings from API:', error));
-  }, []);
 
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +86,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const newStudent: UserProgress = {
       studentName: newStudentName.trim(),
       username: newStudentUsername.trim().toLowerCase(),
-      school: newSchool.trim() || adminConfig.schoolName,
+      school: '',
       gradeLevel: newGradeLevel,
       avatar: newAvatar,
       completedPassages: [],
@@ -126,14 +111,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
     };
 
     try {
+      const school = await lookupSchool(newSchoolCode);
       const result = await registerStudent({
         studentName: newStudent.studentName,
         username: newStudent.username || '',
-        school: newStudent.school || adminConfig.schoolName,
+        teacherUsername: newTeacherUsername.trim().toLowerCase(),
+        schoolCode: school.code,
         gradeLevel: newStudent.gradeLevel || newGradeLevel,
         avatar: newStudent.avatar || newAvatar,
         password: newStudentPassword,
-        progress: newStudent,
+        progress: { ...newStudent, school: school.name },
       });
       if (result.session.role !== 'student' || !result.progress) {
         throw new Error('API tidak mengembalikan akun siswa yang valid.');
@@ -154,9 +141,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsTeacherLoggingIn(true);
     setTeacherPinError('');
     try {
-      const result = await login(teacherUsername.trim(), teacherPinInput, 'teacher');
-      if (result.session.role !== 'teacher') {
-        throw new Error('Akun ini bukan akun guru.');
+      const requestedRole = roleTab === 'platform-admin' ? 'platform_admin' : 'teacher';
+      const result = await login(teacherUsername.trim(), teacherPinInput, requestedRole);
+      if (result.session.role !== requestedRole) {
+        throw new Error('Jenis akun tidak sesuai dengan pilihan masuk.');
       }
       soundFx.playFanfare();
       confetti({ particleCount: 60, spread: 70 });
@@ -206,12 +194,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         <div className="w-full max-w-2xl bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
           {/* Card Hero Header */}
           <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-indigo-900 p-6 sm:p-8 text-white relative overflow-hidden">
-            <div className="relative z-10 flex items-center gap-4">
-              <img
-                src={ENDZI_MASCOT_IMAGE}
-                alt="Endzi, burung enggang sahabat belajar"
-                className="hidden h-28 w-28 shrink-0 rounded-2xl border border-white/20 object-cover shadow-lg sm:block"
-              />
+            <div className="relative z-10 flex items-center justify-between gap-4">
               <div className="min-w-0 space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-teal-200 text-xs font-bold">
                   <span>✨</span> Selamat Datang di Portal Pembelajaran
@@ -223,6 +206,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   Pilih akun Anda untuk melanjutkan petualangan membaca teks inspiratif, menyelesaikan tantangan numerasi, dan mengumpulkan bintang prestasi!
                 </p>
               </div>
+              <img
+                src={ENDZI_MASCOT_IMAGE}
+                alt="Endzi, burung enggang sahabat belajar"
+                className="hidden h-28 w-28 shrink-0 rounded-2xl border border-white/20 object-cover shadow-lg sm:block"
+              />
             </div>
 
             {/* Floating Background Icons */}
@@ -238,7 +226,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 soundFx.playClick();
                 setRoleTab('student');
               }}
-              className={`flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-3 px-2 sm:px-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 roleTab === 'student'
                   ? 'bg-white text-teal-950 shadow-sm border border-slate-200'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
@@ -252,14 +240,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 soundFx.playClick();
                 setRoleTab('teacher');
               }}
-              className={`flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-3 px-2 sm:px-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 roleTab === 'teacher'
                   ? 'bg-white text-indigo-950 shadow-sm border border-slate-200'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
               <span className="text-lg">👨‍🏫</span>
-              <span>Masuk Guru / Admin</span>
+              <span>Guru</span>
+            </button>
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                setRoleTab('platform-admin');
+              }}
+              className={`flex-1 py-3 px-2 sm:px-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                roleTab === 'platform-admin'
+                  ? 'bg-white text-violet-950 shadow-sm border border-slate-200'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <span>🛡️</span>
+              <span>Admin Platform</span>
             </button>
           </div>
 
@@ -307,13 +309,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     )}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Username atau nama terdaftar
+                        Username terdaftar
                       </label>
                       <input
                         type="text"
                         value={studentUsername}
                         onChange={(e) => setStudentUsername(e.target.value)}
-                        placeholder="Masukkan username atau nama lengkap"
+                        placeholder="Masukkan username"
                         autoComplete="username"
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
                       />
@@ -394,6 +396,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Username Guru: <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTeacherUsername}
+                      onChange={(e) => setNewTeacherUsername(e.target.value)}
+                      placeholder="Username guru kelas"
+                      autoComplete="off"
+                      minLength={3}
+                      maxLength={40}
+                      required
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">Minta username guru Anda agar akun masuk ke daftar siswanya.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Kata sandi (minimal 8 karakter)
                     </label>
                     <input
@@ -428,15 +448,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Asal Sekolah / Madrasah:
+                        Kode Sekolah:
                       </label>
                       <input
                         type="text"
-                        value={newSchool}
-                        onChange={(e) => setNewSchool(e.target.value)}
-                        placeholder="Nama sekolah"
+                        value={newSchoolCode}
+                        onChange={(e) => setNewSchoolCode(e.target.value.toUpperCase())}
+                        placeholder="Contoh: A1B2C3D4"
+                        maxLength={8}
+                        minLength={8}
+                        required
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-700"
                       />
+                      <p className="mt-1 text-[11px] text-slate-500">Minta kode ini kepada guru di sekolahmu.</p>
                     </div>
                   </div>
 
@@ -488,16 +512,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
           )}
 
-          {/* BODY: TEACHER TAB */}
-          {roleTab === 'teacher' && (
+          {/* BODY: STAFF ACCESS */}
+          {roleTab !== 'student' && (
             <div className="p-6 sm:p-8 space-y-6">
               <div className="text-center space-y-1.5">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 flex items-center justify-center text-2xl mx-auto shadow-2xs">
-                  👨‍🏫
+                <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center text-2xl mx-auto shadow-2xs ${
+                  roleTab === 'teacher'
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-900'
+                    : 'bg-violet-50 border-violet-200 text-violet-900'
+                }`}>
+                  {roleTab === 'teacher' ? '👨‍🏫' : '🛡️'}
                 </div>
-                <h3 className="text-lg font-black text-slate-900">Portal Akses Guru & Pengampu</h3>
+                <h3 className="text-lg font-black text-slate-900">
+                  {roleTab === 'teacher' ? 'Portal Akses Guru' : 'Portal Admin Platform'}
+                </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Masuk sebagai guru untuk mengelola bacaan literasi, soal numerasi, melihat statistik seluruh siswa, dan mengekspor rekap nilai.
+                  {roleTab === 'teacher'
+                    ? 'Masuk untuk mengelola materi dan siswa di sekolah Anda.'
+                    : 'Masuk untuk mendaftarkan sekolah dan akun guru pertama.'}
                 </p>
               </div>
 
@@ -542,7 +574,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     <span>🔐</span> Informasi Keamanan:
                   </div>
                   <p>
-                    Gunakan username dan kata sandi yang disiapkan administrator Laravel.
+                    {roleTab === 'teacher'
+                      ? 'Gunakan username dan kata sandi akun guru yang disiapkan sekolah.'
+                      : 'Gunakan kredensial admin platform yang dikonfigurasi pada server.'}
                   </p>
                 </div>
 
@@ -556,7 +590,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <span>Memeriksa akun...</span>
                     </>
-                  ) : <span>Masuk Sebagai Guru ➔</span>}
+                  ) : <span>Masuk {roleTab === 'teacher' ? 'Sebagai Guru' : 'Sebagai Admin Platform'} ➔</span>}
                 </button>
 
               </form>

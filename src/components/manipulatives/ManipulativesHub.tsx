@@ -10,12 +10,14 @@ import { CodingAdventureGame } from './CodingAdventureGame';
 import { MathDuelGame } from './MathDuelGame';
 import { TangramDuelGame } from './TangramDuelGame';
 import { soundFx } from '../../utils/audio';
+import { ReadingPracticeItem } from '../../types';
 
 interface ManipulativesHubProps {
   onBack?: () => void;
+  readingPracticeItems?: ReadingPracticeItem[];
 }
 
-export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack }) => {
+export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack, readingPracticeItems }) => {
   const [activeTab, setActiveTab] = useState<
     'fraction' | 'numberline' | 'balance' | 'clock' | 'baseten' | 'reading' | 'wordgame' | 'coding' | 'duel' | 'tangram'
   >('fraction');
@@ -101,7 +103,7 @@ export const ManipulativesHub: React.FC<ManipulativesHubProps> = ({ onBack }) =>
         {activeTab === 'balance' && <BalanceScale />}
         {activeTab === 'clock' && <InteractiveClock />}
         {activeTab === 'baseten' && <BaseTenBlocks />}
-        {activeTab === 'reading' && <ReadingPracticeFaseA />}
+        {activeTab === 'reading' && <ReadingPracticeFaseA items={readingPracticeItems} />}
         {activeTab === 'wordgame' && <WordScrambleGame />}
         {activeTab === 'coding' && <CodingAdventureGame />}
         {activeTab === 'duel' && <MathDuelGame />}

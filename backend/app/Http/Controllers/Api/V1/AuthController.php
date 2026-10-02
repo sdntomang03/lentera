@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\School;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,24 +18,47 @@ class AuthController extends Controller
             $request->merge(['username' => mb_strtolower(trim($request->input('username')))]);
         }
         $data = $request->validate([
-            'studentName' => ['required', 'string', 'max:120', 'unique:users,name'],
+            'studentName' => ['required', 'string', 'max:120'],
             'username' => ['required', 'string', 'min:3', 'max:40', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:users,username'],
-            'school' => ['nullable', 'string', 'max:160'],
+            'teacherUsername' => ['required', 'string', 'min:3', 'max:40'],
+            'schoolCode' => ['required', 'string', 'size:8'],
             'gradeLevel' => ['nullable', 'string', 'max:80'],
             'avatar' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8', 'max:72'],
             'progress' => ['nullable', 'array'],
         ]);
 
+        $school = School::where('code', mb_strtoupper($data['schoolCode']))
+            ->where('is_active', true)
+            ->first();
+        if (! $school) {
+            throw ValidationException::withMessages([
+                'schoolCode' => ['Kode sekolah tidak ditemukan atau sekolah tidak aktif.'],
+            ]);
+        }
+
+        $teacher = User::where('username', mb_strtolower(trim($data['teacherUsername'])))
+            ->where('role', 'teacher')
+            ->where('school_id', $school->id)
+            ->first();
+        if (! $teacher) {
+            throw ValidationException::withMessages([
+                'teacherUsername' => ['Username guru tidak ditemukan di sekolah ini.'],
+            ]);
+        }
+
+        $progress = $data['progress'] ?? [];
+        unset($progress['id'], $progress['studentName'], $progress['username'], $progress['school'], $progress['gradeLevel'], $progress['avatar']);
         $user = User::create([
             'name' => $data['studentName'],
             'username' => mb_strtolower($data['username']),
             'password' => $data['password'],
             'role' => 'student',
-            'school' => $data['school'] ?? null,
+            'school_id' => $school->id,
+            'teacher_id' => $teacher->id,
             'grade_level' => $data['gradeLevel'] ?? null,
             'avatar' => $data['avatar'] ?? null,
-            'progress' => $data['progress'] ?? [],
+            'progress' => $progress,
             'total_points' => max(0, (int) ($data['progress']['totalPoints'] ?? 0)),
         ]);
 
@@ -46,23 +70,20 @@ class AuthController extends Controller
         $data = $request->validate([
             'username' => ['required', 'string'],
             'password' => ['required', 'string'],
-            'role' => ['sometimes', 'in:student,teacher'],
+            'role' => ['sometimes', 'in:student,teacher,platform_admin'],
         ]);
 
         $normalizedUsername = mb_strtolower($data['username']);
         $user = User::query()
-            ->where(function ($query) use ($normalizedUsername) {
-                $query->whereRaw('LOWER(username) = ?', [$normalizedUsername])
-                    ->orWhereRaw('LOWER(name) = ?', [$normalizedUsername]);
-            })
+            ->whereRaw('LOWER(username) = ?', [$normalizedUsername])
             ->when(isset($data['role']), fn ($query) => $query->where('role', $data['role']))
-            ->orderByRaw('CASE WHEN LOWER(username) = ? THEN 0 ELSE 1 END', [$normalizedUsername])
             ->first();
 
         if (
             ! $user
             || ! Hash::check($data['password'], $user->password)
             || (isset($data['role']) && $user->role !== $data['role'])
+            || ($user->role !== 'platform_admin' && ! $user->school?->is_active)
         ) {
             throw ValidationException::withMessages([
                 'credentials' => ['Username atau password salah.'],
@@ -99,7 +120,9 @@ class AuthController extends Controller
             'username' => $user->username,
             'role' => $user->role,
             'studentName' => $user->name,
-            'school' => $user->school,
+            'school' => $user->school?->name,
+            'schoolId' => $user->school_id,
+            'schoolCode' => $user->school?->code,
             'gradeLevel' => $user->grade_level,
             'avatar' => $user->avatar,
             'progress' => array_merge($user->progress ?? [], [

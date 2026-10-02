@@ -41,7 +41,11 @@ Lentera adalah aplikasi React/Vite untuk pembelajaran literasi dan numerasi. Dat
    npm run dev
    ```
 
-Tips belajar AI, chatbot Endzi, serta generator bacaan/soal guru menggunakan DeepSeek. Atur `DEEPSEEK_API_KEY` aktif pada file `.env` di root proyek, lalu mulai ulang server Vite/Node agar konfigurasi dimuat kembali. Di ruang kerja guru, editor Literasi membuat bacaan, kosakata, empat kuis pilihan ganda, kunci jawaban, dan pembahasan; editor Numerasi membuat stimulus, opsi, kunci, petunjuk, dan langkah penyelesaian. Periksa hasil AI sebelum menyimpannya ke Database. Jika DeepSeek bermasalah, fitur Tips menampilkan tips cadangan; generator materi menampilkan pesan kegagalan agar konten yang tidak lengkap tidak tersimpan.
+Tips belajar AI, chatbot Endzi, serta generator bacaan/soal guru menggunakan DeepSeek. Atur `DEEPSEEK_API_KEY` aktif pada file `.env` di root proyek, lalu mulai ulang server Vite/Node agar konfigurasi dimuat kembali. Di ruang kerja guru, editor Literasi membuat bacaan, kosakata, empat kuis pilihan ganda, kunci jawaban, dan pembahasan; editor Numerasi membuat stimulus, opsi, kunci, petunjuk, dan langkah penyelesaian. Tab Latihan Membaca Fase A mengelola materi suku kata, pencocokan kata dengan gambar/emoji, dan kalimat pendek; materi disimpan di database dan dimuat pada latihan siswa. Periksa hasil AI sebelum menyimpannya ke Database. Jika DeepSeek bermasalah, fitur Tips menampilkan tips cadangan; generator materi menampilkan pesan kegagalan agar konten yang tidak lengkap tidak tersimpan.
+
+### Multi-sekolah
+
+Isi `PLATFORM_ADMIN_USERNAME` dan `PLATFORM_ADMIN_PASSWORD` pada `backend\.env` untuk akun Admin Platform. Isi juga `ADMIN_USERNAME`, `ADMIN_PASSWORD`, dan `SCHOOL_NAME` untuk akun guru pertama pada sekolah awal. Jalankan `cd backend; php artisan migrate:fresh --seed` hanya pada database baru atau setelah memastikan data lama memang boleh dihapus. Perintah ini menghapus seluruh tabel aplikasi sebelum membuat skema multi-sekolah dan akun awal. Admin Platform dapat membuat sekolah dan akun guru pertamanya; guru dapat menambah guru serta siswa untuk sekolahnya. Setiap siswa yang dibuat guru atau mendaftar sendiri dengan username guru akan terhubung ke guru tersebut; daftar, pengubahan, dan penghapusan siswa hanya tersedia bagi guru pemilik. Siswa yang dibuat sebelum pembagian per-guru akan otomatis dikaitkan saat migrasi jika sekolahnya hanya memiliki satu guru; data di sekolah dengan beberapa guru memerlukan penetapan manual sebelum muncul di daftar guru. Kode sekolah dan username guru dibagikan kepada siswa untuk pendaftaran. Materi, pengaturan, dan papan peringkat tetap dibatasi berdasarkan sekolah di API.
 
 Vite meneruskan `/api/v1` ke Laravel di `http://127.0.0.1:8000`. Untuk deployment yang menyajikan frontend melalui `npm start`, set `LARAVEL_API_URL` ke origin Laravel. Jika frontend dan API di-host pada origin berbeda, atur `VITE_API_BASE_URL` saat build frontend dan `FRONTEND_URL` pada `backend\.env`.
 
@@ -55,12 +59,14 @@ Semua endpoint aplikasi menggunakan prefix `/api/v1`.
 | `POST`                         | `/auth/login`                             | Publik; mengembalikan token Sanctum |
 | `GET`                          | `/auth/me`                                | Token                               |
 | `POST`                         | `/auth/logout`                            | Token                               |
-| `GET`                          | `/content/passages`, `/content/questions` | Publik                              |
+| `GET`                          | `/content/passages`, `/content/questions`, `/content/reading-practice` | Token; materi sekolah |
+| `GET`                          | `/schools/lookup/{code}`                 | Publik; validasi kode sekolah        |
 | `POST`, `PUT`, `DELETE`        | `/content/{type}[/{id}]`                  | Guru                                |
 | `GET`, `PUT`                   | `/me/progress`                            | Siswa pemilik akun                  |
 | `GET`, `POST`, `PUT`, `DELETE` | `/admin/students[/{id}]`                  | Guru                                |
-| `GET`, `PUT`                   | `/settings`                               | GET publik, PUT guru                |
-| `GET`                          | `/leaderboard`                            | Publik                              |
+| `GET`, `PUT`                   | `/settings`                               | Token sekolah; PUT guru              |
+| `GET`                          | `/leaderboard`                            | Token; papan peringkat sekolah      |
+| `GET`, `POST`, `PUT`           | `/platform/schools[/{id}]`                | Admin Platform                      |
 
 Endpoint terautentikasi menggunakan header `Authorization: Bearer <token>`. Password disimpan dengan hash Laravel; token API dikelola oleh Sanctum.
 

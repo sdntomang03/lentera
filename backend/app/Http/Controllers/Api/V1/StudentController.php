@@ -10,23 +10,47 @@ use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
+
         return response()->json([
-            'data' => User::where('role', 'student')->orderBy('name')->get()
+            'data' => User::where('role', 'student')
+                ->where('school_id', $schoolId)
+                ->where('teacher_id', $request->user()->id)
+                ->orderBy('name')->get()
                 ->map(fn (User $user) => $this->userPayload($user, true)),
+        ]);
+    }
+
+    public function indexTeachers(Request $request): JsonResponse
+    {
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
+
+        return response()->json([
+            'data' => User::where('role', 'teacher')->where('school_id', $schoolId)->orderBy('name')
+                ->get(['id', 'name', 'username', 'school_id'])
+                ->map(fn (User $user) => [
+                    'id' => (string) $user->id,
+                    'teacherName' => $user->name,
+                    'username' => $user->username,
+                    'school' => $request->user()->school?->name,
+                ]),
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
         if (is_string($request->input('username'))) {
             $request->merge(['username' => mb_strtolower(trim($request->input('username')))]);
         }
         $data = $request->validate([
-            'studentName' => ['required', 'string', 'max:120', 'unique:users,name'],
+            'studentName' => ['required', 'string', 'max:120'],
             'username' => ['required', 'string', 'min:3', 'max:40', 'regex:/^[a-z0-9_-]+$/', 'unique:users,username'],
-            'school' => ['nullable', 'string', 'max:160'],
             'gradeLevel' => ['nullable', 'string', 'max:80'],
             'avatar' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8', 'max:72'],
@@ -38,7 +62,8 @@ class StudentController extends Controller
             'username' => $data['username'],
             'password' => $data['password'],
             'role' => 'student',
-            'school' => $data['school'] ?? null,
+            'school_id' => $schoolId,
+            'teacher_id' => $request->user()->id,
             'grade_level' => $data['gradeLevel'] ?? null,
             'avatar' => $data['avatar'] ?? null,
             'progress' => $data['progress'],
@@ -46,6 +71,36 @@ class StudentController extends Controller
         ]);
 
         return response()->json(['data' => $this->userPayload($user, true)], 201);
+    }
+
+    public function storeTeacher(Request $request): JsonResponse
+    {
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
+        if (is_string($request->input('username'))) {
+            $request->merge(['username' => mb_strtolower(trim($request->input('username')))]);
+        }
+        $data = $request->validate([
+            'teacherName' => ['required', 'string', 'max:120'],
+            'username' => ['required', 'string', 'min:3', 'max:40', 'regex:/^[a-z0-9_-]+$/', 'unique:users,username'],
+            'password' => ['required', 'string', 'min:8', 'max:72'],
+        ]);
+        $teacher = User::create([
+            'name' => $data['teacherName'],
+            'username' => $data['username'],
+            'password' => $data['password'],
+            'role' => 'teacher',
+            'school_id' => $schoolId,
+        ]);
+
+        return response()->json([
+            'data' => [
+                'id' => (string) $teacher->id,
+                'teacherName' => $teacher->name,
+                'username' => $teacher->username,
+                'school' => $request->user()->school?->name,
+            ],
+        ], 201);
     }
 
     public function showOwnProgress(Request $request): JsonResponse
@@ -76,14 +131,18 @@ class StudentController extends Controller
 
     public function update(Request $request, User $user): JsonResponse
     {
-        abort_unless($user->role === 'student', 404);
+        abort_unless(
+            $user->role === 'student'
+            && $user->school_id === $request->user()->school_id
+            && $user->teacher_id === $request->user()->id,
+            404,
+        );
         if (is_string($request->input('username'))) {
             $request->merge(['username' => mb_strtolower(trim($request->input('username')))]);
         }
         $data = $request->validate([
             'studentName' => ['sometimes', 'string', 'max:120'],
             'username' => ['sometimes', 'required', 'string', 'min:3', 'max:40', 'regex:/^[a-z0-9_-]+$/', Rule::unique('users', 'username')->ignore($user->id)],
-            'school' => ['nullable', 'string', 'max:160'],
             'gradeLevel' => ['nullable', 'string', 'max:80'],
             'avatar' => ['nullable', 'string', 'max:32'],
             'progress' => ['sometimes', 'array'],
@@ -113,9 +172,14 @@ class StudentController extends Controller
         return response()->json(['data' => $this->userPayload($user->refresh(), true)]);
     }
 
-    public function destroy(User $user): JsonResponse
+    public function destroy(Request $request, User $user): JsonResponse
     {
-        abort_unless($user->role === 'student', 404);
+        abort_unless(
+            $user->role === 'student'
+            && $user->school_id === $request->user()->school_id
+            && $user->teacher_id === $request->user()->id,
+            404,
+        );
         $user->delete();
 
         return response()->json(['message' => 'Akun siswa berhasil dihapus.']);
@@ -127,7 +191,7 @@ class StudentController extends Controller
             'id' => (string) $user->id,
             'studentName' => $user->name,
             'username' => $user->username,
-            'school' => $user->school,
+            'school' => $user->school?->name,
             'gradeLevel' => $user->grade_level,
             'avatar' => $user->avatar,
             'totalPoints' => $user->total_points,
@@ -137,7 +201,7 @@ class StudentController extends Controller
             $payload['id'] = (string) $user->id;
             $payload['studentName'] = $user->name;
             $payload['username'] = $user->username;
-            $payload['school'] = $user->school;
+            $payload['school'] = $user->school?->name;
             $payload['gradeLevel'] = $user->grade_level;
             $payload['avatar'] = $user->avatar;
             $payload['totalPoints'] = $user->total_points;

@@ -4,15 +4,23 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\ContentItem;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ContentController extends Controller
 {
-    public function index(string $type): JsonResponse
+    public function index(Request $request, string $type): JsonResponse
     {
-        $kind = $type === 'passages' ? 'literacy' : 'numeracy';
-        $items = ContentItem::where('type', $kind)->orderBy('id')->get()
+        $kind = $this->contentKind($type);
+        $items = ContentItem::where('type', $kind)
+            ->where(function (Builder $query) use ($request): void {
+                $query->whereNull('school_id');
+                if ($request->user()->school_id) {
+                    $query->orWhere('school_id', $request->user()->school_id);
+                }
+            })
+            ->orderBy('id')->get()
             ->filter(fn (ContentItem $item) => $this->isValidPayload($item->payload, $type))
             ->values()
             ->map(fn (ContentItem $item) => array_merge($item->payload, ['id' => $item->id]));
@@ -24,9 +32,12 @@ class ContentController extends Controller
     {
         $payload = $request->validate($this->contentRules($type))['data'];
         $id = $payload['id'];
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
         $item = ContentItem::create([
             'id' => $id,
-            'type' => $type === 'passages' ? 'literacy' : 'numeracy',
+            'type' => $this->contentKind($type),
+            'school_id' => $schoolId,
             'payload' => $payload,
         ]);
 
@@ -37,16 +48,22 @@ class ContentController extends Controller
     {
         $payload = $request->validate($this->contentRules($type))['data'];
         abort_if($payload['id'] !== $id, 422, 'ID konten pada path dan data harus sama.');
-        $item = ContentItem::where('type', $type === 'passages' ? 'literacy' : 'numeracy')
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
+        $item = ContentItem::where('type', $this->contentKind($type))
+            ->where('school_id', $schoolId)
             ->findOrFail($id);
         $item->update(['payload' => array_merge($payload, ['id' => $id])]);
 
         return response()->json(['data' => array_merge($item->payload, ['id' => $id])]);
     }
 
-    public function destroy(string $type, string $id): JsonResponse
+    public function destroy(Request $request, string $type, string $id): JsonResponse
     {
-        ContentItem::where('type', $type === 'passages' ? 'literacy' : 'numeracy')
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
+        ContentItem::where('type', $this->contentKind($type))
+            ->where('school_id', $schoolId)
             ->findOrFail($id)->delete();
 
         return response()->json(['message' => 'Konten berhasil dihapus.']);
@@ -54,6 +71,21 @@ class ContentController extends Controller
 
     private function contentRules(string $type): array
     {
+        if ($type === 'reading-practice') {
+            return [
+                'data' => ['required', 'array'],
+                'data.id' => ['required', 'string', 'max:128'],
+                'data.kind' => ['required', 'in:syllable,word-image,sentence'],
+                'data.word' => ['required_if:data.kind,syllable,word-image', 'nullable', 'string', 'max:80'],
+                'data.syllables' => ['required_if:data.kind,syllable', 'array', 'min:2'],
+                'data.syllables.*' => ['required', 'string', 'max:30'],
+                'data.image' => ['required_if:data.kind,word-image,sentence', 'nullable', 'string', 'max:32'],
+                'data.options' => ['required_if:data.kind,word-image', 'array', 'size:4'],
+                'data.options.*' => ['required', 'string', 'max:32'],
+                'data.sentence' => ['required_if:data.kind,sentence', 'nullable', 'string', 'max:180'],
+            ];
+        }
+
         $rules = [
             'data' => ['required', 'array'],
             'data.id' => ['required', 'string', 'max:128'],
@@ -107,6 +139,22 @@ class ContentController extends Controller
 
     private function isValidPayload(array $payload, string $type): bool
     {
+        if ($type === 'reading-practice') {
+            return isset($payload['id'], $payload['kind'])
+                && match ($payload['kind']) {
+                    'syllable' => is_string($payload['word'] ?? null)
+                        && is_array($payload['syllables'] ?? null)
+                        && count($payload['syllables']) >= 2,
+                    'word-image' => is_string($payload['word'] ?? null)
+                        && is_string($payload['image'] ?? null)
+                        && is_array($payload['options'] ?? null)
+                        && count($payload['options']) === 4,
+                    'sentence' => is_string($payload['sentence'] ?? null)
+                        && is_string($payload['image'] ?? null),
+                    default => false,
+                };
+        }
+
         if ($type === 'passages') {
             return isset(
                 $payload['title'],
@@ -135,5 +183,14 @@ class ContentController extends Controller
             && is_string($payload['stimulus']['text'] ?? null)
             && is_array($payload['stepByStepSolution'] ?? null)
             && array_key_exists('correctAnswer', $payload);
+    }
+
+    private function contentKind(string $type): string
+    {
+        return match ($type) {
+            'passages' => 'literacy',
+            'questions' => 'numeracy',
+            'reading-practice' => 'reading-practice',
+        };
     }
 }

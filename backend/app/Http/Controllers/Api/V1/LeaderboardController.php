@@ -11,7 +11,9 @@ class LeaderboardController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $entries = User::where('role', 'student')->get()
+        $schoolId = $request->user()->school_id;
+        abort_unless($schoolId, 403, 'Papan peringkat hanya tersedia untuk akun sekolah.');
+        $entries = User::where('role', 'student')->where('school_id', $schoolId)->get()
             ->map(function (User $user): array {
                 $progress = $user->progress ?? [];
                 $completed = count($progress['completedPassages'] ?? [])
@@ -20,7 +22,7 @@ class LeaderboardController extends Controller
                 return [
                     'id' => (string) $user->id,
                     'name' => $user->name,
-                    'school' => $user->school ?? '',
+                    'school' => $user->school?->name ?? '',
                     'city' => '',
                     'level' => $this->levelCode($user->grade_level),
                     'levelLabel' => $user->grade_level ?? '',

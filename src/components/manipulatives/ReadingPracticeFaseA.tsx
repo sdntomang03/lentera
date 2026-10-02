@@ -1,53 +1,38 @@
 import React, { useState } from 'react';
+import { ReadingPracticeItem } from '../../types';
 import { soundFx, SpeechReader } from '../../utils/audio';
 
 type StageKey = 'suku-kata' | 'kata' | 'kalimat';
 
-interface SyllableItem {
-  word: string;
-  syllables: string[];
-}
-
-interface WordItem {
-  word: string;
-  emoji: string;
-  options: string[]; // 4 emoji options, one correct
-}
-
-interface SentenceItem {
-  sentence: string;
-  emoji: string;
-}
-
-const SUKU_KATA_ITEMS: SyllableItem[] = [
-  { word: 'bola', syllables: ['bo', 'la'] },
-  { word: 'nasi', syllables: ['na', 'si'] },
-  { word: 'buku', syllables: ['bu', 'ku'] },
-  { word: 'kaki', syllables: ['ka', 'ki'] },
-  { word: 'mata', syllables: ['ma', 'ta'] },
-  { word: 'rumah', syllables: ['ru', 'mah'] },
-  { word: 'sapi', syllables: ['sa', 'pi'] },
-  { word: 'baju', syllables: ['ba', 'ju'] },
-];
-
-const KATA_ITEMS: WordItem[] = [
-  { word: 'bola', emoji: '⚽', options: ['⚽', '📖', '🐔', '👁️'] },
-  { word: 'buku', emoji: '📖', options: ['🏠', '📖', '🦶', '🍚'] },
-  { word: 'ayam', emoji: '🐔', options: ['🐔', '⚽', '👩', '🚗'] },
-  { word: 'mata', emoji: '👁️', options: ['🦷', '👁️', '📖', '🍚'] },
-  { word: 'nasi', emoji: '🍚', options: ['🍚', '⚽', '🏠', '🐟'] },
-  { word: 'rumah', emoji: '🏠', options: ['🚗', '🏠', '📖', '🐔'] },
-  { word: 'ibu', emoji: '👩', options: ['👦', '👴', '👩', '🐟'] },
-  { word: 'mobil', emoji: '🚗', options: ['🚗', '🏠', '⚽', '🍚'] },
-];
-
-const KALIMAT_ITEMS: SentenceItem[] = [
-  { sentence: 'Ini bola saya.', emoji: '⚽' },
-  { sentence: 'Ibu suka membaca buku.', emoji: '📖' },
-  { sentence: 'Ayam itu berkokok pagi hari.', emoji: '🐔' },
-  { sentence: 'Kaki saya dua.', emoji: '🦶' },
-  { sentence: 'Kami makan nasi bersama.', emoji: '🍚' },
-  { sentence: 'Rumah saya bersih dan rapi.', emoji: '🏠' },
+const DEFAULT_ITEMS: ReadingPracticeItem[] = [
+  ...[
+    { word: 'bola', syllables: ['bo', 'la'] },
+    { word: 'nasi', syllables: ['na', 'si'] },
+    { word: 'buku', syllables: ['bu', 'ku'] },
+    { word: 'kaki', syllables: ['ka', 'ki'] },
+    { word: 'mata', syllables: ['ma', 'ta'] },
+    { word: 'rumah', syllables: ['ru', 'mah'] },
+    { word: 'sapi', syllables: ['sa', 'pi'] },
+    { word: 'baju', syllables: ['ba', 'ju'] },
+  ].map((item, index) => ({ ...item, id: `default-syllable-${index}`, kind: 'syllable' as const })),
+  ...[
+    { word: 'bola', image: '⚽', options: ['⚽', '📖', '🐔', '👁️'] },
+    { word: 'buku', image: '📖', options: ['🏠', '📖', '🦶', '🍚'] },
+    { word: 'ayam', image: '🐔', options: ['🐔', '⚽', '👩', '🚗'] },
+    { word: 'mata', image: '👁️', options: ['🦷', '👁️', '📖', '🍚'] },
+    { word: 'nasi', image: '🍚', options: ['🍚', '⚽', '🏠', '🐟'] },
+    { word: 'rumah', image: '🏠', options: ['🚗', '🏠', '📖', '🐔'] },
+    { word: 'ibu', image: '👩', options: ['👦', '👴', '👩', '🐟'] },
+    { word: 'mobil', image: '🚗', options: ['🚗', '🏠', '⚽', '🍚'] },
+  ].map((item, index) => ({ ...item, id: `default-word-${index}`, kind: 'word-image' as const })),
+  ...[
+    { sentence: 'Ini bola saya.', image: '⚽' },
+    { sentence: 'Ibu suka membaca buku.', image: '📖' },
+    { sentence: 'Ayam itu berkokok pagi hari.', image: '🐔' },
+    { sentence: 'Kaki saya dua.', image: '🦶' },
+    { sentence: 'Kami makan nasi bersama.', image: '🍚' },
+    { sentence: 'Rumah saya bersih dan rapi.', image: '🏠' },
+  ].map((item, index) => ({ ...item, id: `default-sentence-${index}`, kind: 'sentence' as const })),
 ];
 
 const STAGES: { key: StageKey; label: string; icon: string; desc: string }[] = [
@@ -56,7 +41,7 @@ const STAGES: { key: StageKey; label: string; icon: string; desc: string }[] = [
   { key: 'kalimat', label: 'Kalimat Pendek', icon: '📝', desc: 'Dengar & baca kalimat sederhana' },
 ];
 
-export const ReadingPracticeFaseA: React.FC = () => {
+export const ReadingPracticeFaseA: React.FC<{ items?: ReadingPracticeItem[] }> = ({ items = [] }) => {
   const [stage, setStage] = useState<StageKey>('suku-kata');
   const [sukuIndex, setSukuIndex] = useState<number>(0);
   const [kataIndex, setKataIndex] = useState<number>(0);
@@ -65,6 +50,9 @@ export const ReadingPracticeFaseA: React.FC = () => {
   const [isCorrectFeedback, setIsCorrectFeedback] = useState<boolean | null>(null);
   const [score, setScore] = useState<number>(0);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const sukuItems = [...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'syllable');
+  const kataItems = [...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'word-image');
+  const kalimatItems = [...DEFAULT_ITEMS, ...items].filter((item) => item.kind === 'sentence');
 
   const speak = (text: string) => {
     setIsSpeaking(true);
@@ -77,15 +65,15 @@ export const ReadingPracticeFaseA: React.FC = () => {
 
   const goNextSuku = () => {
     soundFx.playClick();
-    setSukuIndex((i) => (i + 1) % SUKU_KATA_ITEMS.length);
+    setSukuIndex((i) => (i + 1) % sukuItems.length);
   };
 
-  const currentKata = KATA_ITEMS[kataIndex];
+  const currentKata = kataItems[kataIndex];
 
   const handlePickOption = (opt: string) => {
     if (selectedOption) return;
     setSelectedOption(opt);
-    const correct = opt === currentKata.emoji;
+    const correct = opt === currentKata.image;
     setIsCorrectFeedback(correct);
     if (correct) {
       soundFx.playCorrect();
@@ -99,16 +87,16 @@ export const ReadingPracticeFaseA: React.FC = () => {
     soundFx.playClick();
     setSelectedOption(null);
     setIsCorrectFeedback(null);
-    setKataIndex((i) => (i + 1) % KATA_ITEMS.length);
+    setKataIndex((i) => (i + 1) % kataItems.length);
   };
 
   const goNextKalimat = () => {
     soundFx.playClick();
-    setKalimatIndex((i) => (i + 1) % KALIMAT_ITEMS.length);
+    setKalimatIndex((i) => (i + 1) % kalimatItems.length);
   };
 
-  const currentSuku = SUKU_KATA_ITEMS[sukuIndex];
-  const currentKalimat = KALIMAT_ITEMS[kalimatIndex];
+  const currentSuku = sukuItems[sukuIndex];
+  const currentKalimat = kalimatItems[kalimatIndex];
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
@@ -207,7 +195,7 @@ export const ReadingPracticeFaseA: React.FC = () => {
           <div className="grid grid-cols-4 gap-3 w-full max-w-sm">
             {currentKata.options.map((opt, idx) => {
               const isPicked = selectedOption === opt;
-              const isTheCorrectOne = opt === currentKata.emoji;
+              const isTheCorrectOne = opt === currentKata.image;
               let stateClass = 'bg-white border-slate-200 hover:bg-slate-50';
               if (selectedOption) {
                 if (isPicked && isCorrectFeedback) stateClass = 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-400';
@@ -230,7 +218,7 @@ export const ReadingPracticeFaseA: React.FC = () => {
           {selectedOption && (
             <div className="flex flex-col items-center gap-3">
               <div className={`text-sm font-bold ${isCorrectFeedback ? 'text-emerald-700' : 'text-rose-700'}`}>
-                {isCorrectFeedback ? '🎉 Benar sekali!' : `Belum tepat, jawabannya ${currentKata.emoji}`}
+              {isCorrectFeedback ? '🎉 Benar sekali!' : `Belum tepat, jawabannya ${currentKata.image}`}
               </div>
               <button
                 onClick={goNextKata}
@@ -246,7 +234,7 @@ export const ReadingPracticeFaseA: React.FC = () => {
       {/* Kalimat Pendek Stage */}
       {stage === 'kalimat' && (
         <div className="mt-6 flex flex-col items-center gap-5 py-4">
-          <div className="text-5xl">{currentKalimat.emoji}</div>
+          <div className="text-5xl">          {currentKalimat.image}</div>
           <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center leading-snug max-w-lg">
             {currentKalimat.sentence}
           </div>

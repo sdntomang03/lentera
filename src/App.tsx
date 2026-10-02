@@ -13,12 +13,13 @@ import { StreakCelebrationModal } from './components/common/StreakCelebrationMod
 import { DailyChallengeModal } from './components/common/DailyChallengeModal';
 import { DailyChallengeCard } from './components/common/DailyChallengeCard';
 import { AdminPanel } from './components/admin/AdminPanel';
+import { PlatformAdminPanel } from './components/admin/PlatformAdminPanel';
 import { LoginView } from './components/auth/LoginView';
 import { StudentDashboard } from './components/dashboard/StudentDashboard';
 import { EndziChatBot } from './components/chat/EndziChatBot';
 import { LITERACY_PASSAGES } from './data/literacyData';
 import { NUMERACY_QUESTIONS } from './data/numeracyData';
-import { UserProgress, LiteracyPassage, NumeracyQuestion, AuthSession } from './types';
+import { UserProgress, LiteracyPassage, NumeracyQuestion, ReadingPracticeItem, AuthSession } from './types';
 import { soundFx } from './utils/audio';
 import { recordActivityStreak, getTodayDateString } from './utils/streak';
 import {
@@ -30,6 +31,7 @@ import { apiRequest, ApiError } from './services/apiClient';
 import {
   fetchPassagesFromApi,
   fetchNumeracyFromApi,
+  fetchReadingPracticeFromApi,
   saveUserToApi,
 } from './services/contentService';
 
@@ -190,24 +192,27 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [passages, setPassages] = useState<LiteracyPassage[]>(LITERACY_PASSAGES);
   const [numeracyQuestions, setNumeracyQuestions] = useState<NumeracyQuestion[]>(NUMERACY_QUESTIONS);
+  const [readingPracticeItems, setReadingPracticeItems] = useState<ReadingPracticeItem[]>([]);
 
   // Fetch from Database on startup
   const loadApiContent = async () => {
     try {
-      const [pData, nData] = await Promise.all([
+      const [pData, nData, readingData] = await Promise.all([
         fetchPassagesFromApi(),
         fetchNumeracyFromApi(),
+        fetchReadingPracticeFromApi(),
       ]);
       if (pData && pData.length > 0) setPassages(pData);
       if (nData && nData.length > 0) setNumeracyQuestions(nData);
+      setReadingPracticeItems(readingData);
     } catch (err) {
       console.warn('Could not load content from Database, using local fallback:', err);
     }
   };
 
   useEffect(() => {
-    loadApiContent();
-  }, []);
+    if (session && session.role !== 'platform_admin') loadApiContent();
+  }, [session?.id, session?.role]);
 
   useEffect(() => {
     if (session?.role !== 'student' || !session.token || !isRestoringProgress) return;
@@ -596,6 +601,10 @@ export default function App() {
     );
   }
 
+  if (session.role === 'platform_admin') {
+    return <PlatformAdminPanel onLogout={handleLogout} />;
+  }
+
   if (session.role === 'teacher') {
     return (
       <AdminPanel
@@ -696,7 +705,9 @@ export default function App() {
 
         {activeNav === 'tips' && <DailyTipsView onBack={handleGoBack} />}
 
-        {activeNav === 'manipulatif' && <ManipulativesHub onBack={handleGoBack} />}
+        {activeNav === 'manipulatif' && (
+          <ManipulativesHub onBack={handleGoBack} readingPracticeItems={readingPracticeItems} />
+        )}
 
         {activeNav === 'akm' && <AkmSimulator onAkmCompleted={handleAkmCompleted} onBack={handleGoBack} />}
 

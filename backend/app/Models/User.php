@@ -7,11 +7,12 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'username', 'role', 'school', 'grade_level', 'avatar', 'progress', 'total_points'])]
+#[Fillable(['name', 'email', 'password', 'username', 'role', 'school_id', 'teacher_id', 'grade_level', 'avatar', 'progress', 'total_points'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -31,5 +32,10 @@ class User extends Authenticatable
             'progress' => 'array',
             'total_points' => 'integer',
         ];
+    }
+
+    public function school(): BelongsTo
+    {
+        return $this->belongsTo(School::class);
     }
 }

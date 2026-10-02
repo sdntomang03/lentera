@@ -8,6 +8,7 @@ import {
   LiteracyGenre,
   NumeracyDomain,
   NumeracyContext,
+  ReadingPracticeItem,
   UserProgress,
   SUPPORTED_GRADE_LEVEL_OPTIONS,
 } from '../../types';
@@ -19,6 +20,9 @@ import {
   fetchNumeracyFromApi,
   saveNumeracyToApi,
   deleteNumeracyFromApi,
+  fetchReadingPracticeFromApi,
+  saveReadingPracticeToApi,
+  deleteReadingPracticeFromApi,
   seedDefaultPassages,
   seedDefaultNumeracy,
   seedFaseCContentToApi,
@@ -32,6 +36,8 @@ import {
 } from '../../services/contentService';
 import { soundFx } from '../../utils/audio';
 import { generateLiteracyPassage, generateNumeracyQuestion } from '../../services/aiContentService';
+import { createSchoolTeacher, fetchSchoolTeachers, SchoolTeacherAccount } from '../../services/authService';
+import { ApiError } from '../../services/apiClient';
 
 export interface TrashItem {
   id: string;
@@ -53,6 +59,26 @@ interface AdminPanelProps {
 
 const AVATAR_OPTIONS = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '⭐', '📚', '🎨', '🌟', '🦁'];
 
+interface ReadingPracticeDraft {
+  id: string;
+  kind: ReadingPracticeItem['kind'];
+  word: string;
+  syllablesText: string;
+  image: string;
+  options: string[];
+  sentence: string;
+}
+
+const emptyReadingPracticeDraft = (): ReadingPracticeDraft => ({
+  id: `reading-a-${Date.now()}`,
+  kind: 'syllable',
+  word: '',
+  syllablesText: '',
+  image: '',
+  options: ['', '', '', ''],
+  sentence: '',
+});
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   onContentUpdated,
   onClose,
@@ -66,8 +92,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     teacherName: 'Guru Penggerak',
   });
 
-  // Admin tabs: 'dashboard' | 'literasi' | 'numerasi' | 'users' | 'trash' | 'settings'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'literasi' | 'numerasi' | 'users' | 'trash' | 'settings'>(
+  // Admin tabs: 'dashboard' | 'literasi' | 'numerasi' | 'reading-practice' | 'users' | 'trash' | 'settings'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'literasi' | 'numerasi' | 'reading-practice' | 'users' | 'trash' | 'settings'>(
     teacherWorkspace ? 'dashboard' : 'literasi',
   );
 
@@ -77,10 +103,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Content state
   const [passages, setPassages] = useState<LiteracyPassage[]>([]);
   const [numeracyList, setNumeracyList] = useState<NumeracyQuestion[]>([]);
+  const [readingPracticeItems, setReadingPracticeItems] = useState<ReadingPracticeItem[]>([]);
   const [users, setUsers] = useState<UserProgress[]>([]);
+  const [teachers, setTeachers] = useState<SchoolTeacherAccount[]>([]);
+  const [showTeacherForm, setShowTeacherForm] = useState(false);
+  const [teacherDraft, setTeacherDraft] = useState({ teacherName: '', username: '', password: '' });
+  const [isSavingTeacher, setIsSavingTeacher] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [actionNotice, setActionNotice] = useState<string>('');
   const [actionError, setActionError] = useState<string>('');
+  const [readingPracticeDraft, setReadingPracticeDraft] = useState<ReadingPracticeDraft | null>(null);
+  const [isSavingReadingPractice, setIsSavingReadingPractice] = useState(false);
 
   // Trash & Recovery state
   const [trashItems, setTrashItems] = useState<TrashItem[]>(() => {
@@ -177,14 +210,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [pData, nData, uData] = await Promise.all([
+      const [pData, nData, readingData, uData, teacherData] = await Promise.all([
         fetchPassagesFromApi(),
         fetchNumeracyFromApi(),
+        fetchReadingPracticeFromApi(),
         fetchAllUsersFromApi(),
+        fetchSchoolTeachers(),
       ]);
       setPassages(pData);
       setNumeracyList(nData);
+      setReadingPracticeItems(readingData);
       setUsers(uData);
+      setTeachers(teacherData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Kesalahan tidak diketahui.';
       console.error('Failed to load content from Database:', err);
@@ -203,6 +240,126 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     soundFx.playWrong();
     setActionError(msg);
     setTimeout(() => setActionError(''), 4500);
+  };
+
+  const handleCreateTeacher = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSavingTeacher(true);
+    try {
+      const teacher = await createSchoolTeacher({
+        ...teacherDraft,
+        teacherName: teacherDraft.teacherName.trim(),
+        username: teacherDraft.username.trim().toLowerCase(),
+      });
+      setTeachers((current) => [...current, teacher].sort((a, b) => a.teacherName.localeCompare(b.teacherName)));
+      setTeacherDraft({ teacherName: '', username: '', password: '' });
+      setShowTeacherForm(false);
+      showNotification('Akun guru berhasil ditambahkan ke sekolah ini.');
+    } catch (error) {
+      console.error('Failed to create school teacher:', error);
+      showError(error instanceof Error ? `Gagal membuat akun guru: ${error.message}` : 'Gagal membuat akun guru.');
+    } finally {
+      setIsSavingTeacher(false);
+    }
+  };
+
+  const openReadingPracticeDraft = (item?: ReadingPracticeItem) => {
+    if (!item) {
+      setReadingPracticeDraft(emptyReadingPracticeDraft());
+      return;
+    }
+
+    setReadingPracticeDraft({
+      id: item.id,
+      kind: item.kind,
+      word: item.kind === 'sentence' ? '' : item.word,
+      syllablesText: item.kind === 'syllable' ? item.syllables.join(' ') : '',
+      image: item.kind === 'syllable' ? '' : item.image,
+      options: item.kind === 'word-image' ? [...item.options] : ['', '', '', ''],
+      sentence: item.kind === 'sentence' ? item.sentence : '',
+    });
+  };
+
+  const handleSaveReadingPractice = async () => {
+    if (!readingPracticeDraft || isSavingReadingPractice) return;
+    const { id, kind } = readingPracticeDraft;
+    let item: ReadingPracticeItem;
+
+    if (kind === 'syllable') {
+      const syllables = readingPracticeDraft.syllablesText.trim().split(/\s+/).filter(Boolean);
+      if (!readingPracticeDraft.word.trim() || syllables.length < 2) {
+        showError('Isi kata dan minimal dua suku kata yang dipisahkan spasi.');
+        return;
+      }
+      item = { id, kind, word: readingPracticeDraft.word.trim(), syllables };
+    } else if (kind === 'word-image') {
+      const options = readingPracticeDraft.options.map((option) => option.trim());
+      if (!readingPracticeDraft.word.trim() || !readingPracticeDraft.image.trim() || options.some((option) => !option)) {
+        showError('Isi kata, gambar/emoji jawaban, dan keempat pilihan gambar.');
+        return;
+      }
+      if (!options.includes(readingPracticeDraft.image.trim())) {
+        showError('Gambar/emoji jawaban harus sama dengan salah satu pilihan.');
+        return;
+      }
+      item = {
+        id,
+        kind,
+        word: readingPracticeDraft.word.trim(),
+        image: readingPracticeDraft.image.trim(),
+        options,
+      };
+    } else {
+      if (!readingPracticeDraft.sentence.trim() || !readingPracticeDraft.image.trim()) {
+        showError('Isi kalimat pendek dan gambar/emoji yang sesuai.');
+        return;
+      }
+      item = {
+        id,
+        kind,
+        sentence: readingPracticeDraft.sentence.trim(),
+        image: readingPracticeDraft.image.trim(),
+      };
+    }
+
+    setIsSavingReadingPractice(true);
+    try {
+      await saveReadingPracticeToApi(item);
+      setReadingPracticeItems((current) => [
+        ...current.filter((entry) => entry.id !== item.id),
+        item,
+      ]);
+      setReadingPracticeDraft(null);
+      showNotification('Latihan Membaca Fase A berhasil disimpan ke database.');
+      onContentUpdated();
+    } catch (error) {
+      console.error('Failed to save Fase A reading practice to Database:', error);
+      showError(error instanceof Error ? `Gagal menyimpan latihan: ${error.message}` : 'Gagal menyimpan latihan membaca ke database.');
+    } finally {
+      setIsSavingReadingPractice(false);
+    }
+  };
+
+  const handleDeleteReadingPractice = (item: ReadingPracticeItem) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Latihan Membaca Fase A',
+      itemTitle: item.kind === 'sentence' ? item.sentence : item.word,
+      itemTypeLabel: item.kind === 'syllable' ? 'Latihan Suku Kata' : item.kind === 'word-image' ? 'Latihan Kata & Gambar' : 'Kalimat Pendek',
+      message: 'Materi ini akan dihapus dari database dan tidak lagi muncul di latihan siswa.',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteReadingPracticeFromApi(item.id);
+          setReadingPracticeItems((current) => current.filter((entry) => entry.id !== item.id));
+          showNotification('Latihan membaca berhasil dihapus.');
+          onContentUpdated();
+        } catch (error) {
+          console.error('Failed to delete Fase A reading practice from Database:', error);
+          showError(error instanceof Error ? `Gagal menghapus latihan: ${error.message}` : 'Gagal menghapus latihan membaca dari database.');
+        }
+      },
+    });
   };
 
   // --- PASSAGE HANDLERS ---
@@ -943,7 +1100,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       soundFx.playCorrect();
       showNotification('Pengaturan portal guru berhasil diperbarui!');
     } catch (err) {
-      showError('Gagal menyimpan pengaturan ke Database.');
+      const message = err instanceof ApiError
+        ? err.status === 401
+          ? 'Sesi login telah berakhir. Silakan login kembali.'
+          : err.message
+        : err instanceof Error
+          ? err.message
+          : 'Terjadi kesalahan yang tidak diketahui.';
+      showError(`Gagal menyimpan pengaturan: ${message}`);
     }
   };
 
@@ -1115,6 +1279,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <button
             onClick={() => {
               soundFx.playClick();
+              setActiveTab('reading-practice');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'reading-practice'
+                ? 'bg-white text-rose-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            🔤 Latihan Membaca A ({readingPracticeItems.length})
+          </button>
+          <button
+            onClick={() => {
+              soundFx.playClick();
               setActiveTab('users');
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -1221,6 +1398,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span>📥</span> Sinkron Fase C
             </button>
           </div>
+        )}
+
+        {activeTab === 'reading-practice' && (
+          <button
+            type="button"
+            onClick={() => openReadingPracticeDraft()}
+            className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+          >
+            <span>➕</span> Buat Latihan Fase A
+          </button>
         )}
 
         {activeTab === 'trash' && (
@@ -1439,6 +1626,204 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             )}
 
+            {activeTab === 'reading-practice' && (
+              <div className="space-y-5">
+                {readingPracticeDraft && (
+                  <section className="rounded-2xl border border-rose-200 bg-white p-5 shadow-xs sm:p-6">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-base font-bold text-slate-900">
+                          {readingPracticeItems.some((item) => item.id === readingPracticeDraft.id)
+                            ? 'Ubah Materi Latihan'
+                            : 'Buat Materi Latihan Membaca'}
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Materi disimpan ke database dan langsung tersedia pada Latihan Membaca Fase A siswa.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReadingPracticeDraft(null)}
+                        className="rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100"
+                      >
+                        Batal
+                      </button>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="space-y-1 text-xs font-semibold text-slate-700">
+                        Tahap latihan
+                        <select
+                          value={readingPracticeDraft.kind}
+                          onChange={(event) => setReadingPracticeDraft((draft) => draft
+                            ? { ...draft, kind: event.target.value as ReadingPracticeItem['kind'] }
+                            : draft)}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        >
+                          <option value="syllable">Suku kata</option>
+                          <option value="word-image">Kata & gambar</option>
+                          <option value="sentence">Kalimat pendek</option>
+                        </select>
+                      </label>
+
+                      {readingPracticeDraft.kind !== 'sentence' && (
+                        <label className="space-y-1 text-xs font-semibold text-slate-700">
+                          Kata
+                          <input
+                            value={readingPracticeDraft.word}
+                            onChange={(event) => setReadingPracticeDraft((draft) => draft ? { ...draft, word: event.target.value } : draft)}
+                            maxLength={80}
+                            placeholder="Contoh: bola"
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </label>
+                      )}
+
+                      {readingPracticeDraft.kind === 'syllable' && (
+                        <label className="space-y-1 text-xs font-semibold text-slate-700 sm:col-span-2">
+                          Suku kata (pisahkan dengan spasi)
+                          <input
+                            value={readingPracticeDraft.syllablesText}
+                            onChange={(event) => setReadingPracticeDraft((draft) => draft ? { ...draft, syllablesText: event.target.value } : draft)}
+                            placeholder="Contoh: bo la"
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </label>
+                      )}
+
+                      {readingPracticeDraft.kind === 'word-image' && (
+                        <>
+                          <label className="space-y-1 text-xs font-semibold text-slate-700">
+                            Gambar jawaban (emoji)
+                            <input
+                              value={readingPracticeDraft.image}
+                              onChange={(event) => setReadingPracticeDraft((draft) => draft ? { ...draft, image: event.target.value } : draft)}
+                              maxLength={32}
+                              placeholder="Contoh: ⚽"
+                              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            />
+                          </label>
+                          <fieldset className="space-y-2 sm:col-span-2">
+                            <legend className="text-xs font-semibold text-slate-700">Empat pilihan gambar (emoji)</legend>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              {readingPracticeDraft.options.map((option, index) => (
+                                <input
+                                  key={index}
+                                  value={option}
+                                  onChange={(event) => setReadingPracticeDraft((draft) => {
+                                    if (!draft) return draft;
+                                    const options = [...draft.options];
+                                    options[index] = event.target.value;
+                                    return { ...draft, options };
+                                  })}
+                                  maxLength={32}
+                                  aria-label={`Pilihan gambar ${index + 1}`}
+                                  placeholder={`Pilihan ${index + 1}`}
+                                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-center text-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                />
+                              ))}
+                            </div>
+                            <p className="text-[11px] text-slate-500">Pastikan gambar jawaban juga ada di salah satu pilihan.</p>
+                          </fieldset>
+                        </>
+                      )}
+
+                      {readingPracticeDraft.kind === 'sentence' && (
+                        <>
+                          <label className="space-y-1 text-xs font-semibold text-slate-700">
+                            Gambar pendamping (emoji)
+                            <input
+                              value={readingPracticeDraft.image}
+                              onChange={(event) => setReadingPracticeDraft((draft) => draft ? { ...draft, image: event.target.value } : draft)}
+                              maxLength={32}
+                              placeholder="Contoh: 🐈"
+                              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs font-semibold text-slate-700 sm:col-span-2">
+                            Kalimat pendek
+                            <textarea
+                              value={readingPracticeDraft.sentence}
+                              onChange={(event) => setReadingPracticeDraft((draft) => draft ? { ...draft, sentence: event.target.value } : draft)}
+                              maxLength={180}
+                              rows={2}
+                              placeholder="Contoh: Ini bola saya."
+                              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            />
+                          </label>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="mt-5 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveReadingPractice()}
+                        disabled={isSavingReadingPractice}
+                        className="rounded-xl bg-rose-700 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-rose-800 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isSavingReadingPractice ? 'Menyimpan...' : 'Simpan ke Database'}
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">Materi Latihan Fase A</h2>
+                    <p className="mt-1 text-xs text-slate-500">Konten tersimpan: {readingPracticeItems.length} item.</p>
+                  </div>
+                  {readingPracticeItems.length > 0 ? (
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {readingPracticeItems.map((item) => {
+                        const title = item.kind === 'sentence' ? item.sentence : item.word;
+                        const detail = item.kind === 'syllable'
+                          ? `Suku kata: ${item.syllables.join(' · ')}`
+                          : item.kind === 'word-image'
+                            ? `Gambar jawaban: ${item.image}`
+                            : `Gambar: ${item.image}`;
+                        const label = item.kind === 'syllable' ? 'Suku kata' : item.kind === 'word-image' ? 'Kata & gambar' : 'Kalimat pendek';
+                        return (
+                          <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="inline-flex rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-800">{label}</span>
+                                <h3 className="mt-2 break-words text-sm font-bold text-slate-900">{title}</h3>
+                                <p className="mt-1 text-xs text-slate-500">{detail}</p>
+                              </div>
+                              <span className="text-2xl" aria-hidden="true">{item.kind === 'sentence' || item.kind === 'word-image' ? item.image : '🔤'}</span>
+                            </div>
+                            <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                              <button
+                                type="button"
+                                onClick={() => openReadingPracticeDraft(item)}
+                                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                              >
+                                Ubah
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReadingPractice(item)}
+                                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+                      <div className="text-3xl">🔤</div>
+                      <p className="mt-2 text-sm font-bold text-slate-800">Belum ada materi tambahan</p>
+                      <p className="mt-1 text-xs text-slate-500">Buat latihan suku kata, pasangan kata dan gambar, atau kalimat pendek.</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
             {/* LITERASI TAB */}
             {activeTab === 'literasi' && (
               <div className="space-y-4">
@@ -1587,6 +1972,78 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {/* USERS / SISWA MANAGEMENT TAB */}
             {activeTab === 'users' && (
               <div className="space-y-6">
+                <section className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-2xs sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900">Guru di Sekolah Ini ({teachers.length})</h2>
+                      <p className="mt-1 text-xs text-slate-500">Setiap guru hanya dapat mengakses data sekolah ini.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowTeacherForm((visible) => !visible)}
+                      className="rounded-xl bg-indigo-700 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-800"
+                    >
+                      {showTeacherForm ? 'Tutup Form' : '+ Tambah Guru'}
+                    </button>
+                  </div>
+                  {showTeacherForm && (
+                    <form onSubmit={handleCreateTeacher} className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Nama guru
+                        <input
+                          required
+                          maxLength={120}
+                          value={teacherDraft.teacherName}
+                          onChange={(event) => setTeacherDraft((draft) => ({ ...draft, teacherName: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-slate-700">
+                        Username
+                        <input
+                          required
+                          minLength={3}
+                          maxLength={40}
+                          pattern="[A-Za-z0-9_-]{3,40}"
+                          value={teacherDraft.username}
+                          onChange={(event) => setTeacherDraft((draft) => ({ ...draft, username: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-slate-700">
+                        Kata sandi awal
+                        <input
+                          required
+                          type="password"
+                          minLength={8}
+                          maxLength={72}
+                          value={teacherDraft.password}
+                          onChange={(event) => setTeacherDraft((draft) => ({ ...draft, password: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={isSavingTeacher}
+                        className="self-end rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-800 disabled:opacity-60"
+                      >
+                        {isSavingTeacher ? 'Membuat akun...' : 'Buat Akun Guru'}
+                      </button>
+                    </form>
+                  )}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {teachers.map((teacher) => (
+                      <div key={teacher.id} className="flex items-center gap-3 rounded-xl bg-indigo-50/60 p-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg">👨‍🏫</span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-bold text-slate-800">{teacher.teacherName}</span>
+                          <span className="block truncate text-[11px] text-slate-500">@{teacher.username}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 text-xs text-slate-600">
                   <div className="flex items-center gap-4">
                     <span>
@@ -1598,7 +2055,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>{teacherWorkspace ? 'Akun siswa dikelola melalui database Laravel.' : <>Profil aktif saat ini: <strong className="text-teal-900">{currentStudentName || 'Belum dipilih'}</strong></>}</span>
+                    <span>{teacherWorkspace ? `Daftar hanya menampilkan siswa dari ${adminConfig.schoolName}.` : <>Profil aktif saat ini: <strong className="text-teal-900">{currentStudentName || 'Belum dipilih'}</strong></>}</span>
                   </div>
                 </div>
 

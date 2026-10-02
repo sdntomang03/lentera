@@ -57,6 +57,11 @@ export interface LiteracyPassage {
   authorOrSource: string;
 }
 
+export type ReadingPracticeItem =
+  | { id: string; kind: 'syllable'; word: string; syllables: string[] }
+  | { id: string; kind: 'word-image'; word: string; image: string; options: string[] }
+  | { id: string; kind: 'sentence'; sentence: string; image: string };
+
 export type NumeracyDomain = 'bilangan' | 'geometri' | 'data' | 'aljabar';
 export type NumeracyContext = 'personal' | 'sosial-budaya' | 'saintifik';
 
@@ -158,13 +163,15 @@ export interface LeaderboardEntry {
   isCurrentUser?: boolean;
 }
 
-export type UserRole = 'student' | 'teacher';
+export type UserRole = 'student' | 'teacher' | 'platform_admin';
 
 export interface AuthSession {
   role: UserRole;
   studentName: string;
   username?: string;
   school: string;
+  schoolId?: number;
+  schoolCode?: string;
   gradeLevel?: string;
   avatar: string;
   id?: string;

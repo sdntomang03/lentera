@@ -1,4 +1,4 @@
-import { LiteracyPassage, NumeracyQuestion, UserProgress } from '../types';
+import { LiteracyPassage, NumeracyQuestion, ReadingPracticeItem, UserProgress } from '../types';
 import { LITERACY_PASSAGES } from '../data/literacyData';
 import { NUMERACY_QUESTIONS } from '../data/numeracyData';
 import { apiRequest, ApiError } from './apiClient';
@@ -143,9 +143,9 @@ function isNumeracyQuestion(value: unknown): value is NumeracyQuestion {
 }
 
 async function saveContent(
-  type: 'passages' | 'questions',
+  type: 'passages' | 'questions' | 'reading-practice',
   id: string,
-  data: LiteracyPassage | NumeracyQuestion,
+  data: LiteracyPassage | NumeracyQuestion | ReadingPracticeItem,
 ): Promise<void> {
   const path = `/content/${type}/${encodeURIComponent(id)}`;
   try {
@@ -190,6 +190,44 @@ export async function saveNumeracyToApi(question: NumeracyQuestion): Promise<voi
 
 export async function deleteNumeracyFromApi(questionId: string): Promise<void> {
   await apiRequest(`/content/questions/${encodeURIComponent(questionId)}`, { method: 'DELETE' });
+}
+
+function isReadingPracticeItem(value: unknown): value is ReadingPracticeItem {
+  if (!isRecord(value) || typeof value.id !== 'string') return false;
+  if (value.kind === 'syllable') {
+    return typeof value.word === 'string'
+      && Array.isArray(value.syllables)
+      && value.syllables.length >= 2
+      && value.syllables.every((part) => typeof part === 'string');
+  }
+  if (value.kind === 'word-image') {
+    return typeof value.word === 'string'
+      && typeof value.image === 'string'
+      && Array.isArray(value.options)
+      && value.options.length === 4
+      && value.options.every((option) => typeof option === 'string');
+  }
+  return value.kind === 'sentence'
+    && typeof value.sentence === 'string'
+    && typeof value.image === 'string';
+}
+
+export async function fetchReadingPracticeFromApi(): Promise<ReadingPracticeItem[]> {
+  const response = await apiRequest<{ data: unknown }>('/content/reading-practice');
+  if (!Array.isArray(response.data)) throw new Error('Respons latihan membaca Fase A tidak valid.');
+  const items = response.data.filter(isReadingPracticeItem);
+  if (items.length !== response.data.length) {
+    console.warn('Some malformed Fase A reading practice content from the Database was ignored.');
+  }
+  return items;
+}
+
+export async function saveReadingPracticeToApi(item: ReadingPracticeItem): Promise<void> {
+  await saveContent('reading-practice', item.id, item);
+}
+
+export async function deleteReadingPracticeFromApi(itemId: string): Promise<void> {
+  await apiRequest(`/content/reading-practice/${encodeURIComponent(itemId)}`, { method: 'DELETE' });
 }
 
 export async function seedDefaultPassages(): Promise<void> {

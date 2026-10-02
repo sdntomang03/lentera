@@ -75,7 +75,7 @@ export async function fetchGlobalLeaderboard(
     // API endpoint unavailable or in standalone preview, use local database
   }
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && !currentUser.school) {
     entries = getStoredLeaderboard();
   }
 
@@ -89,10 +89,12 @@ export async function fetchGlobalLeaderboard(
   const userEntry: LeaderboardEntry = {
     id: currentUserId,
     name: `${currentUser.studentName} (Kamu)`,
-    school: 'SD NEGERI 007 NUNUKAN',
+    school: currentUser.school || 'Sekolah Saya',
     city: 'Pusat Belajar',
-    level: 'fase-c',
-    levelLabel: 'Fase C (Kls 5-6)',
+    level: currentUser.gradeLevel?.toLowerCase().includes('fase a') ? 'fase-a'
+      : currentUser.gradeLevel?.toLowerCase().includes('fase b') ? 'fase-b'
+        : 'fase-c',
+    levelLabel: currentUser.gradeLevel || 'Fase belum diatur',
     points: currentUser.totalPoints,
     badgesCount: currentUser.earnedBadges.length,
     activitiesCompleted: completedActivities,
@@ -150,7 +152,7 @@ export async function fetchGlobalLeaderboard(
 
   return {
     topTen,
-    totalParticipants: mergedList.length + 140, // realistic representation of participants
+    totalParticipants: mergedList.length,
     currentUserRank,
     currentUserEntry: userEntry,
     cutoffScoreForTopTen,
