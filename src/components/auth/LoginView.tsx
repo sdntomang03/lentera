@@ -178,11 +178,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
       {/* Top Header Bar */}
       <header className="w-full border-b border-white/10 px-4 sm:px-8 py-4 backdrop-blur-md bg-slate-900/50 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <img
-            src={ENDZI_MASCOT_IMAGE}
-            alt="Endzi, maskot Lentera"
-            className="w-11 h-11 rounded-2xl object-cover border border-white/20 shadow-lg shadow-teal-900/40"
-          />
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-800 text-2xl text-white shadow-lg shadow-teal-900/40">
+            🏮
+          </div>
           <div>
             <h1 className="text-base font-black tracking-tight text-white flex items-center gap-2">
               Lentera
@@ -208,16 +206,23 @@ export const LoginView: React.FC<LoginViewProps> = ({
         <div className="w-full max-w-2xl bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-300">
           {/* Card Hero Header */}
           <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-indigo-900 p-6 sm:p-8 text-white relative overflow-hidden">
-            <div className="relative z-10 space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-teal-200 text-xs font-bold">
-                <span>✨</span> Selamat Datang di Portal Pembelajaran
+            <div className="relative z-10 flex items-center justify-between gap-4">
+              <div className="min-w-0 space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-teal-200 text-xs font-bold">
+                  <span>✨</span> Selamat Datang di Portal Pembelajaran
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                  Silakan Masuk Terlebih Dahulu
+                </h2>
+                <p className="text-xs sm:text-sm text-teal-100/90 max-w-lg leading-relaxed">
+                  Pilih akun Anda untuk melanjutkan petualangan membaca teks inspiratif, menyelesaikan tantangan numerasi, dan mengumpulkan bintang prestasi!
+                </p>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                Silakan Masuk Terlebih Dahulu
-              </h2>
-              <p className="text-xs sm:text-sm text-teal-100/90 max-w-lg leading-relaxed">
-                Pilih akun Anda untuk melanjutkan petualangan membaca teks inspiratif, menyelesaikan tantangan numerasi, dan mengumpulkan bintang prestasi!
-              </p>
+              <img
+                src={ENDZI_MASCOT_IMAGE}
+                alt="Endzi, burung enggang sahabat belajar"
+                className="hidden h-28 w-28 shrink-0 rounded-2xl border border-white/20 object-cover shadow-lg sm:block"
+              />
             </div>
 
             {/* Floating Background Icons */}
