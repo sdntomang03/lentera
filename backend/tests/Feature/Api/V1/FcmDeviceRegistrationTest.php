@@ -4,6 +4,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\FcmDevice;
 use App\Models\User;
+use App\Services\FcmMessageSender;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -85,6 +86,147 @@ class FcmDeviceRegistrationTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'platform_admin']))
             ->deleteJson('/api/v1/platform/fcm-devices/999')
             ->assertNotFound();
+    }
+
+    public function test_only_platform_admin_can_send_fcm_notifications(): void
+    {
+        $payload = [
+            'recipient' => 'all',
+            'title' => 'Pengingat Tirta',
+            'body' => 'Saatnya minum air putih.',
+        ];
+
+        $this->postJson('/api/v1/platform/fcm-notifications', $payload)->assertUnauthorized();
+        $this->actingAs(User::factory()->create(['role' => 'teacher']))
+            ->postJson('/api/v1/platform/fcm-notifications', $payload)
+            ->assertForbidden();
+    }
+
+    public function test_platform_admin_can_send_a_notification_to_all_registered_devices(): void
+    {
+        $device = FcmDevice::create([
+            'user_id' => User::factory()->create()->id,
+            'username' => 'tirta_user',
+            'device_id' => (string) Str::uuid(),
+            'token' => 'device-token-one',
+            'platform' => 'android',
+        ]);
+        $this->mock(FcmMessageSender::class)
+            ->shouldReceive('send')
+            ->once()
+            ->with(['device-token-one'], 'Pengingat Tirta', 'Saatnya minum air putih.')
+            ->andReturn([
+                'successCount' => 1,
+                'failureCount' => 0,
+                'invalidTokens' => [],
+            ]);
+
+        $this->actingAs(User::factory()->create(['role' => 'platform_admin']))
+            ->postJson('/api/v1/platform/fcm-notifications', [
+                'recipient' => 'all',
+                'title' => 'Pengingat Tirta',
+                'body' => 'Saatnya minum air putih.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('successCount', 1)
+            ->assertJsonPath('failureCount', 0)
+            ->assertJsonPath('recipientCount', 1);
+
+        $this->assertDatabaseHas('fcm_devices', ['id' => $device->id]);
+    }
+
+    public function test_platform_admin_can_send_a_notification_to_one_username_and_remove_invalid_tokens(): void
+    {
+        $targetUser = User::factory()->create(['username' => 'target_user']);
+        $otherUser = User::factory()->create(['username' => 'other_user']);
+        $targetDevice = FcmDevice::create([
+            'user_id' => $targetUser->id,
+            'username' => $targetUser->username,
+            'device_id' => (string) Str::uuid(),
+            'token' => 'target-invalid-token',
+            'platform' => 'android',
+        ]);
+        $otherDevice = FcmDevice::create([
+            'user_id' => $otherUser->id,
+            'username' => $otherUser->username,
+            'device_id' => (string) Str::uuid(),
+            'token' => 'other-token',
+            'platform' => 'android',
+        ]);
+        $this->mock(FcmMessageSender::class)
+            ->shouldReceive('send')
+            ->once()
+            ->with(['target-invalid-token'], 'Judul', 'Isi pesan')
+            ->andReturn([
+                'successCount' => 0,
+                'failureCount' => 1,
+                'invalidTokens' => ['target-invalid-token'],
+            ]);
+
+        $this->actingAs(User::factory()->create(['role' => 'platform_admin']))
+            ->postJson('/api/v1/platform/fcm-notifications', [
+                'recipient' => 'username',
+                'username' => 'target_user',
+                'title' => 'Judul',
+                'body' => 'Isi pesan',
+            ])
+            ->assertOk()
+            ->assertJsonPath('successCount', 0)
+            ->assertJsonPath('failureCount', 1)
+            ->assertJsonPath('invalidDeviceCount', 1)
+            ->assertJsonPath('recipientCount', 1);
+
+        $this->assertDatabaseMissing('fcm_devices', ['id' => $targetDevice->id]);
+        $this->assertSame('other-token', FcmDevice::findOrFail($otherDevice->id)->token);
+    }
+
+    public function test_fcm_notification_requires_valid_fields_and_a_registered_recipient(): void
+    {
+        $admin = User::factory()->create(['role' => 'platform_admin']);
+        $this->actingAs($admin)->postJson('/api/v1/platform/fcm-notifications', [
+            'recipient' => 'username',
+            'username' => '',
+            'title' => str_repeat('x', 121),
+            'body' => '',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['username', 'title', 'body']);
+
+        $this->postJson('/api/v1/platform/fcm-notifications', [
+            'recipient' => 'username',
+            'username' => 'no_device',
+            'title' => 'Judul',
+            'body' => 'Pesan',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'Tidak ditemukan perangkat FCM untuk username tersebut.');
+    }
+
+    public function test_fcm_send_failure_returns_a_safe_error_without_exposing_credentials(): void
+    {
+        FcmDevice::create([
+            'user_id' => User::factory()->create()->id,
+            'username' => 'tirta_user',
+            'device_id' => (string) Str::uuid(),
+            'token' => 'device-token-one',
+            'platform' => 'android',
+        ]);
+
+        $this->mock(FcmMessageSender::class)
+            ->shouldReceive('send')
+            ->once()
+            ->andThrow(new \RuntimeException('Private service account details'));
+
+        $this->actingAs(User::factory()->create(['role' => 'platform_admin']))
+            ->postJson('/api/v1/platform/fcm-notifications', [
+                'recipient' => 'all',
+                'title' => 'Judul',
+                'body' => 'Pesan',
+            ])
+            ->assertStatus(502)
+            ->assertJsonPath(
+                'message',
+                'Notifikasi gagal dikirim. Periksa konfigurasi Firebase Admin SDK di server.',
+            )
+            ->assertDontSee('Private service account details');
     }
 
     public function test_tirta_can_register_and_refresh_a_device_fcm_token_without_an_account(): void

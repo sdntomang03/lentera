@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\FcmDevice;
+use App\Services\FcmMessageSender;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class FcmDeviceController extends Controller
@@ -90,6 +93,78 @@ class FcmDeviceController extends Controller
 
         return response()->json([
             'message' => 'Pendaftaran perangkat FCM berhasil dihapus.',
+        ]);
+    }
+
+    public function sendNotification(Request $request, FcmMessageSender $sender): JsonResponse
+    {
+        $data = $request->validate([
+            'recipient' => ['required', Rule::in(['all', 'username'])],
+            'username' => ['required_if:recipient,username', 'nullable', 'string', 'max:255'],
+            'title' => ['required', 'string', 'max:120'],
+            'body' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $devices = FcmDevice::query()
+            ->whereNotNull('token')
+            ->where('token', '!=', '')
+            ->when($data['recipient'] === 'username', function ($query) use ($data): void {
+                $username = trim($data['username']);
+                $query->where(function ($query) use ($username): void {
+                    $query->where('username', $username)
+                        ->orWhereIn('user_id', DB::table('users')->select('id')->where('username', $username));
+                });
+            })
+            ->get(['id', 'user_id', 'username', 'token']);
+
+        if ($devices->isEmpty()) {
+            return response()->json([
+                'message' => $data['recipient'] === 'all'
+                    ? 'Belum ada perangkat FCM yang terdaftar.'
+                    : 'Tidak ditemukan perangkat FCM untuk username tersebut.',
+            ], 422);
+        }
+
+        $successCount = 0;
+        $failureCount = 0;
+        $invalidDeviceIds = [];
+
+        try {
+            foreach ($devices->chunk(500) as $batch) {
+                $tokens = $batch->map(fn (FcmDevice $device): string => $device->token)->all();
+                $tokenDeviceIds = $batch->mapWithKeys(
+                    fn (FcmDevice $device): array => [$device->token => $device->id],
+                );
+                $result = $sender->send($tokens, $data['title'], $data['body']);
+                $successCount += $result['successCount'];
+                $failureCount += $result['failureCount'];
+
+                foreach ($result['invalidTokens'] as $invalidToken) {
+                    if (isset($tokenDeviceIds[$invalidToken])) {
+                        $invalidDeviceIds[] = $tokenDeviceIds[$invalidToken];
+                    }
+                }
+            }
+        } catch (Exception $exception) {
+            Log::error('Firebase notification delivery failed.', [
+                'exception' => $exception::class,
+            ]);
+
+            return response()->json([
+                'message' => 'Notifikasi gagal dikirim. Periksa konfigurasi Firebase Admin SDK di server.',
+            ], 502);
+        }
+
+        if ($invalidDeviceIds !== []) {
+            FcmDevice::query()->whereIn('id', array_unique($invalidDeviceIds))->delete();
+        }
+
+        return response()->json([
+            'message' => 'Pengiriman notifikasi selesai.',
+            'successCount' => $successCount,
+            'failureCount' => $failureCount,
+            'invalidDeviceCount' => count(array_unique($invalidDeviceIds)),
+            'recipientCount' => $devices->count(),
         ]);
     }
 }

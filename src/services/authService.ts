@@ -127,6 +127,14 @@ export interface PlatformFcmDevicePage {
   total: number;
 }
 
+export interface FcmNotificationResult {
+  message: string;
+  successCount: number;
+  failureCount: number;
+  invalidDeviceCount: number;
+  recipientCount: number;
+}
+
 export interface SchoolTeacherAccount {
   id: string;
   teacherName: string;
@@ -162,6 +170,18 @@ export async function fetchPlatformFcmDevices(page = 1): Promise<PlatformFcmDevi
 
 export async function deletePlatformFcmDevice(deviceId: number): Promise<void> {
   await apiRequest(`/platform/fcm-devices/${deviceId}`, { method: 'DELETE' });
+}
+
+export async function sendPlatformFcmNotification(data: {
+  recipient: 'all' | 'username';
+  username?: string;
+  title: string;
+  body: string;
+}): Promise<FcmNotificationResult> {
+  return apiRequest<FcmNotificationResult>('/platform/fcm-notifications', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function createPlatformSchool(data: {

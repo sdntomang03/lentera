@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BellRing, ChevronLeft, ChevronRight, Copy, RefreshCw, Smartphone, Trash2 } from 'lucide-react';
+import { BellRing, ChevronLeft, ChevronRight, Copy, RefreshCw, Send, Smartphone, Trash2 } from 'lucide-react';
 import {
   createPlatformSchool,
   deletePlatformFcmDevice,
@@ -7,6 +7,7 @@ import {
   fetchPlatformSchools,
   PlatformFcmDevice,
   PlatformSchool,
+  sendPlatformFcmNotification,
   updatePlatformSchool,
 } from '../../services/authService';
 import { soundFx } from '../../utils/audio';
@@ -34,6 +35,18 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
   const [deletingDeviceId, setDeletingDeviceId] = useState<number | null>(null);
   const [fcmError, setFcmError] = useState('');
   const [copiedDeviceId, setCopiedDeviceId] = useState<number | null>(null);
+  const [notificationRecipient, setNotificationRecipient] = useState<'all' | 'username'>('all');
+  const [notificationUsername, setNotificationUsername] = useState('');
+  const [notificationTitle, setNotificationTitle] = useState('');
+  const [notificationBody, setNotificationBody] = useState('');
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
+  const [notificationSendError, setNotificationSendError] = useState('');
+  const [notificationSendResult, setNotificationSendResult] = useState<{
+    successCount: number;
+    failureCount: number;
+    invalidDeviceCount: number;
+    recipientCount: number;
+  } | null>(null);
 
   const loadSchools = async () => {
     setIsLoading(true);
@@ -96,6 +109,43 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
       setFcmError(deleteError instanceof Error ? deleteError.message : 'Token FCM tidak dapat dihapus.');
     } finally {
       setDeletingDeviceId(null);
+    }
+  };
+
+  const handleSendFcmNotification = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const username = notificationUsername.trim();
+    if (notificationRecipient === 'username' && !username) {
+      setNotificationSendError('Masukkan username penerima.');
+      return;
+    }
+
+    if (notificationRecipient === 'all' && !window.confirm(
+      `Kirim notifikasi ini ke seluruh ${fcmTotal} perangkat terdaftar?`,
+    )) {
+      return;
+    }
+
+    setIsSendingNotification(true);
+    setNotificationSendError('');
+    setNotificationSendResult(null);
+    try {
+      const result = await sendPlatformFcmNotification({
+        recipient: notificationRecipient,
+        ...(notificationRecipient === 'username' ? { username } : {}),
+        title: notificationTitle.trim(),
+        body: notificationBody.trim(),
+      });
+      setNotificationSendResult(result);
+      if (result.invalidDeviceCount > 0) {
+        await loadFcmDevices(fcmPage);
+      }
+    } catch (sendError) {
+      setNotificationSendError(sendError instanceof Error
+        ? sendError.message
+        : 'Notifikasi gagal dikirim. Periksa kembali pengaturan Firebase.');
+    } finally {
+      setIsSendingNotification(false);
     }
   };
 
@@ -320,6 +370,99 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
 
       {activeTab === 'devices' && (
       <section className="mx-auto mb-8 max-w-7xl px-4 sm:px-6">
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+          <div className="mb-4 flex items-start gap-3">
+            <span className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700">
+              <Send size={18} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Kirim Notifikasi</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Kirim pesan melalui Firebase ke perangkat Tirta yang sudah terdaftar.
+              </p>
+            </div>
+          </div>
+          <form onSubmit={(event) => void handleSendFcmNotification(event)} className="grid gap-4 lg:grid-cols-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              Penerima
+              <select
+                value={notificationRecipient}
+                onChange={(event) => {
+                  setNotificationRecipient(event.target.value as 'all' | 'username');
+                  setNotificationSendResult(null);
+                  setNotificationSendError('');
+                }}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600"
+              >
+                <option value="all">Semua perangkat ({fcmTotal})</option>
+                <option value="username">Satu username</option>
+              </select>
+            </label>
+            {notificationRecipient === 'username' && (
+              <label className="block text-xs font-semibold text-slate-700">
+                Username Lentera
+                <input
+                  required
+                  maxLength={255}
+                  autoComplete="off"
+                  value={notificationUsername}
+                  onChange={(event) => setNotificationUsername(event.target.value)}
+                  placeholder="Contoh: nama_pengguna"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600"
+                />
+              </label>
+            )}
+            <label className="block text-xs font-semibold text-slate-700 lg:col-span-2">
+              Judul notifikasi
+              <input
+                required
+                maxLength={120}
+                value={notificationTitle}
+                onChange={(event) => setNotificationTitle(event.target.value)}
+                placeholder="Contoh: Pengingat belajar"
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700 lg:col-span-2">
+              Isi pesan
+              <textarea
+                required
+                maxLength={1000}
+                rows={3}
+                value={notificationBody}
+                onChange={(event) => setNotificationBody(event.target.value)}
+                placeholder="Tulis pesan singkat untuk pengguna..."
+                className="mt-1 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600"
+              />
+            </label>
+            {(notificationSendError || notificationSendResult) && (
+              <div
+                role={notificationSendError ? 'alert' : 'status'}
+                className={`rounded-xl border px-3 py-2.5 text-xs font-medium lg:col-span-2 ${
+                  notificationSendError
+                    ? 'border-rose-200 bg-rose-50 text-rose-800'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                }`}
+              >
+                {notificationSendError || `Terkirim ke ${notificationSendResult?.successCount} dari ${notificationSendResult?.recipientCount} perangkat. Gagal: ${notificationSendResult?.failureCount}.${notificationSendResult?.invalidDeviceCount ? ` ${notificationSendResult.invalidDeviceCount} token tidak valid telah dihapus.` : ''}`}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3 lg:col-span-2">
+              <p className="text-[10px] leading-relaxed text-slate-500">
+                Pengiriman dibatasi hingga 10 permintaan per menit. Pastikan pesan ditujukan dengan benar.
+              </p>
+              <button
+                type="submit"
+                disabled={isSendingNotification || fcmTotal === 0}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-violet-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Send size={14} aria-hidden="true" />
+                {isSendingNotification ? 'Mengirim…' : 'Kirim Notifikasi'}
+              </button>
+            </div>
+          </form>
+        </div>
+
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
             <div className="flex items-start gap-3">
