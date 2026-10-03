@@ -83,4 +83,13 @@ class FcmDeviceController extends Controller
             'message' => 'Perangkat berhasil dilepas dari notifikasi.',
         ]);
     }
+
+    public function destroyDevice(FcmDevice $device): JsonResponse
+    {
+        $device->delete();
+
+        return response()->json([
+            'message' => 'Pendaftaran perangkat FCM berhasil dihapus.',
+        ]);
+    }
 }

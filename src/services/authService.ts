@@ -160,6 +160,10 @@ export async function fetchPlatformFcmDevices(page = 1): Promise<PlatformFcmDevi
   return apiRequest<PlatformFcmDevicePage>(`/platform/fcm-devices?page=${page}`);
 }
 
+export async function deletePlatformFcmDevice(deviceId: number): Promise<void> {
+  await apiRequest(`/platform/fcm-devices/${deviceId}`, { method: 'DELETE' });
+}
+
 export async function createPlatformSchool(data: {
   name: string;
   teacherName: string;

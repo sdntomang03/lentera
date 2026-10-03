@@ -69,6 +69,7 @@ Semua endpoint aplikasi menggunakan prefix `/api/v1`.
 | `GET`                          | `/leaderboard`                            | Token; papan peringkat sekolah      |
 | `GET`, `POST`, `PUT`           | `/platform/schools[/{id}]`                | Admin Platform                      |
 | `GET`                          | `/platform/fcm-devices`                   | Admin Platform; token untuk Firebase |
+| `DELETE`                       | `/platform/fcm-devices/{id}`              | Admin Platform; menghapus pendaftaran perangkat |
 
 Endpoint terautentikasi menggunakan header `Authorization: Bearer <token>`. Password disimpan dengan hash Laravel; token API dikelola oleh Sanctum.
 

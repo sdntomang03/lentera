@@ -56,6 +56,37 @@ class FcmDeviceRegistrationTest extends TestCase
             ->assertJsonPath('data.0.username', 'legacy_user');
     }
 
+    public function test_only_platform_admin_can_delete_a_fcm_device_registration(): void
+    {
+        $device = FcmDevice::create([
+            'user_id' => User::factory()->create()->id,
+            'username' => 'tirta_user',
+            'device_id' => (string) Str::uuid(),
+            'token' => 'private-device-token',
+            'platform' => 'android',
+        ]);
+
+        $this->deleteJson('/api/v1/platform/fcm-devices/'.$device->id)->assertUnauthorized();
+        $this->actingAs(User::factory()->create(['role' => 'teacher']))
+            ->deleteJson('/api/v1/platform/fcm-devices/'.$device->id)
+            ->assertForbidden();
+        $this->assertDatabaseHas('fcm_devices', ['id' => $device->id]);
+
+        $this->actingAs(User::factory()->create(['role' => 'platform_admin']))
+            ->deleteJson('/api/v1/platform/fcm-devices/'.$device->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Pendaftaran perangkat FCM berhasil dihapus.');
+
+        $this->assertDatabaseMissing('fcm_devices', ['id' => $device->id]);
+    }
+
+    public function test_platform_admin_gets_not_found_when_deleting_a_missing_fcm_device(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => 'platform_admin']))
+            ->deleteJson('/api/v1/platform/fcm-devices/999')
+            ->assertNotFound();
+    }
+
     public function test_tirta_can_register_and_refresh_a_device_fcm_token_without_an_account(): void
     {
         $deviceId = (string) Str::uuid();

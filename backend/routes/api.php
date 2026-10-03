@@ -48,6 +48,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::middleware('platform-admin')->group(function (): void {
             Route::get('/platform/fcm-devices', [FcmDeviceController::class, 'index']);
+            Route::delete('/platform/fcm-devices/{device}', [FcmDeviceController::class, 'destroyDevice']);
             Route::get('/platform/schools', [SchoolController::class, 'index']);
             Route::post('/platform/schools', [SchoolController::class, 'store']);
             Route::put('/platform/schools/{school}', [SchoolController::class, 'update']);

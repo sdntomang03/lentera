@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BellRing, ChevronLeft, ChevronRight, Copy, RefreshCw, Smartphone } from 'lucide-react';
+import { BellRing, ChevronLeft, ChevronRight, Copy, RefreshCw, Smartphone, Trash2 } from 'lucide-react';
 import {
   createPlatformSchool,
+  deletePlatformFcmDevice,
   fetchPlatformFcmDevices,
   fetchPlatformSchools,
   PlatformFcmDevice,
@@ -30,6 +31,7 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
   const [fcmLastPage, setFcmLastPage] = useState(1);
   const [fcmTotal, setFcmTotal] = useState(0);
   const [isFcmLoading, setIsFcmLoading] = useState(true);
+  const [deletingDeviceId, setDeletingDeviceId] = useState<number | null>(null);
   const [fcmError, setFcmError] = useState('');
   const [copiedDeviceId, setCopiedDeviceId] = useState<number | null>(null);
 
@@ -76,6 +78,24 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
       window.setTimeout(() => setCopiedDeviceId((current) => current === device.id ? null : current), 2000);
     } catch {
       setFcmError('Token tidak dapat disalin. Periksa izin clipboard browser.');
+    }
+  };
+
+  const handleDeleteFcmDevice = async (device: PlatformFcmDevice) => {
+    const username = device.username || 'pengguna ini';
+    if (!window.confirm(`Hapus token FCM perangkat milik ${username}? Perangkat ini tidak lagi menerima notifikasi sampai mendaftar ulang.`)) {
+      return;
+    }
+
+    setDeletingDeviceId(device.id);
+    setFcmError('');
+    try {
+      await deletePlatformFcmDevice(device.id);
+      await loadFcmDevices(fcmDevices.length === 1 && fcmPage > 1 ? fcmPage - 1 : fcmPage);
+    } catch (deleteError) {
+      setFcmError(deleteError instanceof Error ? deleteError.message : 'Token FCM tidak dapat dihapus.');
+    } finally {
+      setDeletingDeviceId(null);
     }
   };
 
@@ -342,6 +362,7 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
                       <th className="px-4 py-3">Platform</th>
                       <th className="px-4 py-3">Token FCM</th>
                       <th className="px-6 py-3">Terakhir diperbarui</th>
+                      <th className="px-4 py-3"><span className="sr-only">Aksi</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -380,6 +401,18 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
                             dateStyle: 'medium',
                             timeStyle: 'short',
                           })}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteFcmDevice(device)}
+                            disabled={deletingDeviceId === device.id}
+                            aria-label={`Hapus token FCM ${device.username || device.deviceId}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 py-2 text-[10px] font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-wait disabled:opacity-50"
+                          >
+                            <Trash2 size={13} aria-hidden="true" />
+                            {deletingDeviceId === device.id ? 'Menghapus…' : 'Hapus'}
+                          </button>
                         </td>
                       </tr>
                     ))}
