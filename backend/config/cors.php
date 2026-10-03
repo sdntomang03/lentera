@@ -19,7 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:3000')],
+    'allowed_origins' => array_values(array_unique([
+        env('FRONTEND_URL', 'http://localhost:3000'),
+        'capacitor://localhost',
+        'http://localhost',
+        'https://localhost',
+    ])),
 
     'allowed_origins_patterns' => [],
 

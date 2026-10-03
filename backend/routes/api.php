@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ContentController;
+use App\Http\Controllers\Api\V1\FcmDeviceController;
 use App\Http\Controllers\Api\V1\LeaderboardController;
 use App\Http\Controllers\Api\V1\SchoolController;
 use App\Http\Controllers\Api\V1\SettingController;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
+    Route::post('/devices/fcm-token', [FcmDeviceController::class, 'store'])->middleware('throttle:20,1');
     Route::get('/schools/lookup/{code}', [SchoolController::class, 'lookup'])->middleware('throttle:20,1');
 
     Route::middleware('auth:sanctum')->group(function (): void {
