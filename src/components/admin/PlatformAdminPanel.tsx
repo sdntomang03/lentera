@@ -15,6 +15,7 @@ interface PlatformAdminPanelProps {
 }
 
 export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout }) => {
+  const [activeTab, setActiveTab] = useState<'schools' | 'devices'>('schools');
   const [schools, setSchools] = useState<PlatformSchool[]>([]);
   const [schoolName, setSchoolName] = useState('');
   const [teacherName, setTeacherName] = useState('');
@@ -119,22 +120,63 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
   return (
     <main className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Lentera · Admin Platform</p>
-            <h1 className="mt-1 text-xl font-black text-slate-900">Manajemen Sekolah</h1>
-            <p className="mt-1 text-xs text-slate-500">Daftarkan sekolah beserta akun guru pertamanya.</p>
+        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Lentera · Admin Platform</p>
+              <h1 className="mt-1 text-xl font-black text-slate-900">
+                {activeTab === 'schools' ? 'Manajemen Sekolah' : 'Perangkat Notifikasi'}
+              </h1>
+              <p className="mt-1 text-xs text-slate-500">
+                {activeTab === 'schools'
+                  ? 'Daftarkan sekolah beserta akun guru pertamanya.'
+                  : 'Kelola dan salin token FCM perangkat pengguna.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Keluar
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-          >
-            Keluar
-          </button>
+          <nav aria-label="Menu Admin Platform" className="mt-4 flex gap-2 overflow-x-auto">
+            <button
+              type="button"
+              aria-pressed={activeTab === 'schools'}
+              onClick={() => setActiveTab('schools')}
+              className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-bold transition-colors ${
+                activeTab === 'schools'
+                  ? 'border-violet-700 text-violet-800'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
+              }`}
+            >
+              Manajemen Sekolah
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeTab === 'devices'}
+              onClick={() => setActiveTab('devices')}
+              className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-bold transition-colors ${
+                activeTab === 'devices'
+                  ? 'border-violet-700 text-violet-800'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
+              }`}
+            >
+              <BellRing size={15} aria-hidden="true" />
+              Perangkat FCM
+              <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                activeTab === 'devices' ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {fcmTotal}
+              </span>
+            </button>
+          </nav>
         </div>
       </header>
 
+      {activeTab === 'schools' && (
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[0.8fr_1.2fr]">
         <section className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
           <h2 className="text-base font-bold text-slate-900">Tambah Sekolah</h2>
@@ -254,7 +296,9 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
           )}
         </section>
       </div>
+      )}
 
+      {activeTab === 'devices' && (
       <section className="mx-auto mb-8 max-w-7xl px-4 sm:px-6">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
@@ -376,6 +420,7 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
           </p>
         </div>
       </section>
+      )}
     </main>
   );
 };
