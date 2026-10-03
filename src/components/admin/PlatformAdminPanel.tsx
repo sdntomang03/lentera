@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { BellRing, ChevronLeft, ChevronRight, Copy, RefreshCw, Smartphone } from 'lucide-react';
 import {
   createPlatformSchool,
+  fetchPlatformFcmDevices,
   fetchPlatformSchools,
+  PlatformFcmDevice,
   PlatformSchool,
   updatePlatformSchool,
 } from '../../services/authService';
@@ -21,6 +24,13 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fcmDevices, setFcmDevices] = useState<PlatformFcmDevice[]>([]);
+  const [fcmPage, setFcmPage] = useState(1);
+  const [fcmLastPage, setFcmLastPage] = useState(1);
+  const [fcmTotal, setFcmTotal] = useState(0);
+  const [isFcmLoading, setIsFcmLoading] = useState(true);
+  const [fcmError, setFcmError] = useState('');
+  const [copiedDeviceId, setCopiedDeviceId] = useState<number | null>(null);
 
   const loadSchools = async () => {
     setIsLoading(true);
@@ -37,6 +47,36 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
   useEffect(() => {
     void loadSchools();
   }, []);
+
+  const loadFcmDevices = async (page = fcmPage) => {
+    setIsFcmLoading(true);
+    try {
+      const result = await fetchPlatformFcmDevices(page);
+      setFcmDevices(result.data);
+      setFcmPage(result.current_page);
+      setFcmLastPage(result.last_page);
+      setFcmTotal(result.total);
+      setFcmError('');
+    } catch (loadError) {
+      setFcmError(loadError instanceof Error ? loadError.message : 'Gagal memuat daftar perangkat FCM.');
+    } finally {
+      setIsFcmLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadFcmDevices(1);
+  }, []);
+
+  const handleCopyToken = async (device: PlatformFcmDevice) => {
+    try {
+      await navigator.clipboard.writeText(device.token);
+      setCopiedDeviceId(device.id);
+      window.setTimeout(() => setCopiedDeviceId((current) => current === device.id ? null : current), 2000);
+    } catch {
+      setFcmError('Token tidak dapat disalin. Periksa izin clipboard browser.');
+    }
+  };
 
   const handleCreateSchool = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -214,6 +254,128 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
           )}
         </section>
       </div>
+
+      <section className="mx-auto mb-8 max-w-7xl px-4 sm:px-6">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+            <div className="flex items-start gap-3">
+              <span className="rounded-xl bg-violet-50 p-2.5 text-violet-700">
+                <BellRing size={19} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Perangkat Notifikasi FCM</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {fcmTotal} perangkat terdaftar · token ditampilkan hanya untuk admin platform.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadFcmDevices(fcmPage)}
+              disabled={isFcmLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <RefreshCw size={14} className={isFcmLoading ? 'animate-spin' : ''} aria-hidden="true" />
+              Segarkan
+            </button>
+          </div>
+
+          {fcmError && (
+            <div role="alert" className="mx-5 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800 sm:mx-6">
+              {fcmError}
+            </div>
+          )}
+
+          {isFcmLoading ? (
+            <p className="py-12 text-center text-xs text-slate-500">Memuat daftar perangkat...</p>
+          ) : fcmDevices.length ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left">
+                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-6 py-3">Pengguna / Perangkat</th>
+                      <th className="px-4 py-3">Platform</th>
+                      <th className="px-4 py-3">Token FCM</th>
+                      <th className="px-6 py-3">Terakhir diperbarui</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {fcmDevices.map((device) => (
+                      <tr key={device.id} className="align-top">
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-bold text-slate-900">{device.username || 'Username belum tersedia'}</p>
+                          <p className="mt-1 max-w-56 truncate font-mono text-[10px] text-slate-400" title={device.deviceId}>
+                            {device.deviceId}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold capitalize text-slate-600">
+                            <Smartphone size={12} aria-hidden="true" />
+                            {device.platform}
+                          </span>
+                        </td>
+                        <td className="max-w-xl px-4 py-4">
+                          <div className="flex items-start gap-2">
+                            <code className="min-w-0 flex-1 break-all rounded-lg bg-slate-50 px-2.5 py-2 font-mono text-[10px] leading-relaxed text-slate-600">
+                              {device.token}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => void handleCopyToken(device)}
+                              aria-label={`Salin token FCM ${device.username || device.deviceId}`}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
+                            >
+                              <Copy size={12} aria-hidden="true" />
+                              {copiedDeviceId === device.id ? 'Tersalin' : 'Salin'}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-xs text-slate-500">
+                          {new Date(device.updatedAt).toLocaleString('id-ID', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 sm:px-6">
+                <p className="text-[11px] text-slate-500">Halaman {fcmPage} dari {fcmLastPage}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void loadFcmDevices(fcmPage - 1)}
+                    disabled={fcmPage <= 1 || isFcmLoading}
+                    aria-label="Halaman sebelumnya"
+                    className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <ChevronLeft size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void loadFcmDevices(fcmPage + 1)}
+                    disabled={fcmPage >= fcmLastPage || isFcmLoading}
+                    aria-label="Halaman berikutnya"
+                    className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="px-5 py-12 text-center text-xs text-slate-500 sm:px-6">
+              Belum ada perangkat yang mendaftarkan notifikasi FCM.
+            </p>
+          )}
+          <p className="border-t border-amber-100 bg-amber-50 px-5 py-3 text-[10px] leading-relaxed text-amber-900 sm:px-6">
+            Token FCM bersifat sensitif. Gunakan hanya untuk pengiriman notifikasi resmi dan jangan membagikannya di luar admin tepercaya.
+          </p>
+        </div>
+      </section>
     </main>
   );
 };

@@ -111,6 +111,22 @@ export interface PlatformSchool {
   teacher_count?: number;
 }
 
+export interface PlatformFcmDevice {
+  id: number;
+  deviceId: string;
+  username: string | null;
+  token: string;
+  platform: 'android' | 'ios';
+  updatedAt: string;
+}
+
+export interface PlatformFcmDevicePage {
+  data: PlatformFcmDevice[];
+  current_page: number;
+  last_page: number;
+  total: number;
+}
+
 export interface SchoolTeacherAccount {
   id: string;
   teacherName: string;
@@ -138,6 +154,10 @@ export async function createSchoolTeacher(data: {
 export async function fetchPlatformSchools(): Promise<PlatformSchool[]> {
   const response = await apiRequest<{ data: PlatformSchool[] }>('/platform/schools');
   return response.data;
+}
+
+export async function fetchPlatformFcmDevices(page = 1): Promise<PlatformFcmDevicePage> {
+  return apiRequest<PlatformFcmDevicePage>(`/platform/fcm-devices?page=${page}`);
 }
 
 export async function createPlatformSchool(data: {

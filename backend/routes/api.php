@@ -12,12 +12,13 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
-    Route::post('/devices/fcm-token', [FcmDeviceController::class, 'store'])->middleware('throttle:20,1');
     Route::get('/schools/lookup/{code}', [SchoolController::class, 'lookup'])->middleware('throttle:20,1');
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+        Route::post('/devices/fcm-token', [FcmDeviceController::class, 'store'])->middleware('throttle:20,1');
+        Route::delete('/devices/fcm-token', [FcmDeviceController::class, 'destroy'])->middleware('throttle:20,1');
         Route::middleware('active-school')->group(function (): void {
             Route::get('/me/progress', [StudentController::class, 'showOwnProgress']);
             Route::put('/me/progress', [StudentController::class, 'saveOwnProgress']);
@@ -46,6 +47,7 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::middleware('platform-admin')->group(function (): void {
+            Route::get('/platform/fcm-devices', [FcmDeviceController::class, 'index']);
             Route::get('/platform/schools', [SchoolController::class, 'index']);
             Route::post('/platform/schools', [SchoolController::class, 'store']);
             Route::put('/platform/schools/{school}', [SchoolController::class, 'update']);

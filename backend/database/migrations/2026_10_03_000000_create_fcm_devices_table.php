@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('fcm_devices', function (Blueprint $table): void {
             $table->id();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->uuid('device_id')->unique();
             $table->text('token');
             $table->string('platform', 16);
