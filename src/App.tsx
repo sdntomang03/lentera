@@ -196,17 +196,28 @@ export default function App() {
 
   // Fetch from Database on startup
   const loadApiContent = async () => {
-    try {
-      const [pData, nData, readingData] = await Promise.all([
+    const [passagesResult, numeracyResult, readingResult] = await Promise.allSettled([
         fetchPassagesFromApi(),
         fetchNumeracyFromApi(),
         fetchReadingPracticeFromApi(),
-      ]);
-      if (pData && pData.length > 0) setPassages(pData);
-      if (nData && nData.length > 0) setNumeracyQuestions(nData);
-      setReadingPracticeItems(readingData);
-    } catch (err) {
-      console.warn('Could not load content from Database, using local fallback:', err);
+    ]);
+
+    if (passagesResult.status === 'fulfilled') {
+      if (passagesResult.value.length > 0) setPassages(passagesResult.value);
+    } else {
+      console.warn('Could not load literacy content from Database, using local fallback:', passagesResult.reason);
+    }
+
+    if (numeracyResult.status === 'fulfilled') {
+      if (numeracyResult.value.length > 0) setNumeracyQuestions(numeracyResult.value);
+    } else {
+      console.warn('Could not load numeracy content from Database, using local fallback:', numeracyResult.reason);
+    }
+
+    if (readingResult.status === 'fulfilled') {
+      setReadingPracticeItems(readingResult.value);
+    } else {
+      console.warn('Could not load reading practice from Database:', readingResult.reason);
     }
   };
 

@@ -1041,7 +1041,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         try {
           await deleteUserFromApi(userId, name);
         } catch (err) {
-          console.warn('Gagal menghapus akun siswa dari Database, memperbarui state lokal:', err);
+          const message = err instanceof Error ? err.message : 'Terjadi kesalahan yang tidak diketahui.';
+          showError(`Gagal menghapus akun siswa "${name}" dari Database: ${message}`);
+          return;
         }
         setUsers((prev) =>
           prev.filter((u) => (u.id || u.studentName) !== userId && u.studentName !== name)
