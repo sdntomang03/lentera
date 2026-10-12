@@ -7,6 +7,8 @@ use App\Models\ContentItem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ContentController extends Controller
 {
@@ -31,6 +33,9 @@ class ContentController extends Controller
     public function store(Request $request, string $type): JsonResponse
     {
         $payload = $request->validate($this->contentRules($type))['data'];
+        if ($type === 'questions') {
+            $this->validateNumeracyAnswers($payload);
+        }
         $id = $payload['id'];
         $schoolId = $request->user()->school_id;
         abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
@@ -47,6 +52,9 @@ class ContentController extends Controller
     public function update(Request $request, string $type, string $id): JsonResponse
     {
         $payload = $request->validate($this->contentRules($type))['data'];
+        if ($type === 'questions') {
+            $this->validateNumeracyAnswers($payload);
+        }
         abort_if($payload['id'] !== $id, 422, 'ID konten pada path dan data harus sama.');
         $schoolId = $request->user()->school_id;
         abort_unless($schoolId, 403, 'Akun guru belum terhubung ke sekolah.');
@@ -130,6 +138,8 @@ class ContentController extends Controller
             'data.stimulus.text' => ['required', 'string'],
             'data.question' => ['required', 'string'],
             'data.type' => ['required', 'in:single-choice,multiple-choice,matching,numeric,true-false'],
+            'data.options' => ['required_if:data.type,single-choice,multiple-choice', 'array', 'min:2'],
+            'data.options.*' => ['required_if:data.type,single-choice,multiple-choice', 'string', 'max:500'],
             'data.correctAnswer' => ['required'],
             'data.hint' => ['required', 'string'],
             'data.stepByStepSolution' => ['required', 'array'],
@@ -182,7 +192,61 @@ class ContentController extends Controller
             && is_array($payload['stimulus'] ?? null)
             && is_string($payload['stimulus']['text'] ?? null)
             && is_array($payload['stepByStepSolution'] ?? null)
-            && array_key_exists('correctAnswer', $payload);
+            && array_key_exists('correctAnswer', $payload)
+            && $this->hasValidNumeracyAnswer($payload);
+    }
+
+    private function validateNumeracyAnswers(array $payload): void
+    {
+        $options = is_array($payload['options'] ?? null) ? $payload['options'] : [];
+        $rules = match ($payload['type'] ?? null) {
+            'single-choice' => [
+                'options' => ['required', 'array', 'min:2'],
+                'options.*' => ['required', 'string', 'max:500', 'distinct'],
+                'correctAnswer' => ['required', 'string', Rule::in($options)],
+            ],
+            'multiple-choice' => [
+                'options' => ['required', 'array', 'min:2'],
+                'options.*' => ['required', 'string', 'max:500', 'distinct'],
+                'correctAnswer' => ['required', 'array', 'min:1'],
+                'correctAnswer.*' => ['required', 'string', Rule::in($options), 'distinct'],
+            ],
+            'numeric' => is_array($payload['correctAnswer'] ?? null)
+                ? [
+                    'correctAnswer' => ['required', 'array', 'min:1'],
+                    'correctAnswer.*' => ['required', 'numeric', 'distinct'],
+                ]
+                : ['correctAnswer' => ['required', 'numeric']],
+            default => [],
+        };
+
+        if ($rules !== []) {
+            Validator::make($payload, $rules)->validate();
+        }
+    }
+
+    private function hasValidNumeracyAnswer(array $payload): bool
+    {
+        $options = $payload['options'] ?? null;
+        $answer = $payload['correctAnswer'] ?? null;
+
+        return match ($payload['type'] ?? null) {
+            'single-choice' => is_array($options)
+                && count($options) >= 2
+                && count(array_filter($options, fn ($option): bool => is_string($option) && trim($option) !== '')) === count($options)
+                && is_string($answer)
+                && in_array($answer, $options, true),
+            'multiple-choice' => is_array($options)
+                && count($options) >= 2
+                && count(array_filter($options, fn ($option): bool => is_string($option) && trim($option) !== '')) === count($options)
+                && is_array($answer)
+                && count($answer) > 0
+                && count(array_filter($answer, fn ($item): bool => is_string($item) && in_array($item, $options, true))) === count($answer),
+            'numeric' => is_array($answer)
+                ? count($answer) > 0 && count(array_filter($answer, fn ($item): bool => is_numeric($item))) === count($answer)
+                : is_numeric($answer),
+            default => true,
+        };
     }
 
     private function contentKind(string $type): string

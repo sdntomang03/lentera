@@ -78,12 +78,23 @@ class SchoolController extends Controller
 
     public function update(Request $request, School $school): JsonResponse
     {
+        if (is_string($request->input('code'))) {
+            $request->merge(['code' => mb_strtoupper(trim($request->input('code')))]);
+        }
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:160', Rule::unique('schools', 'name')->ignore($school->id)],
+            'code' => ['sometimes', 'required', 'string', 'min:4', 'max:12', 'regex:/^[A-Z0-9]+$/', Rule::unique('schools', 'code')->ignore($school->id)],
             'is_active' => ['sometimes', 'required', 'boolean'],
         ]);
         $school->update($data);
 
         return response()->json(['data' => $school->refresh()]);
+    }
+
+    public function destroy(School $school): JsonResponse
+    {
+        $school->delete();
+
+        return response()->json(['message' => 'Sekolah dan seluruh data terkait berhasil dihapus.']);
     }
 }

@@ -236,6 +236,58 @@ class RestApiTest extends TestCase
             ->assertJsonPath('data.0.title', 'Bacaan Uji');
     }
 
+    public function test_students_receive_valid_multiple_choice_questions_and_invalid_questions_are_hidden(): void
+    {
+        $school = $this->createSchool();
+        $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
+        $question = $this->validNumeracyPayload('num-choice-test');
+
+        $this->actingAs($teacher)->postJson('/api/v1/content/questions', [
+            'data' => $question,
+        ])->assertCreated()
+            ->assertJsonPath('data.options.0', 'Pilihan A')
+            ->assertJsonPath('data.correctAnswer.0', 'Pilihan A');
+
+        $invalidQuestion = $this->validNumeracyPayload('num-choice-invalid');
+        unset($invalidQuestion['options']);
+        $this->actingAs($teacher)->postJson('/api/v1/content/questions', [
+            'data' => $invalidQuestion,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['data.options']);
+
+        ContentItem::create([
+            'id' => 'num-choice-legacy-invalid',
+            'type' => 'numeracy',
+            'school_id' => $school->id,
+            'payload' => array_merge($question, [
+                'id' => 'num-choice-legacy-invalid',
+                'options' => [],
+            ]),
+        ]);
+
+        $this->actingAs($teacher)->getJson('/api/v1/content/questions')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', 'num-choice-test')
+            ->assertJsonPath('data.0.options.1', 'Pilihan B');
+    }
+
+    public function test_numeric_numeracy_questions_accept_multiple_correct_answers(): void
+    {
+        $school = $this->createSchool();
+        $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
+        $question = $this->validNumeracyPayload('num-numeric-test');
+        $question['type'] = 'numeric';
+        $question['correctAnswer'] = [12, 12.5];
+        unset($question['options']);
+
+        $this->actingAs($teacher)->postJson('/api/v1/content/questions', [
+            'data' => $question,
+        ])->assertCreated()
+            ->assertJsonPath('data.correctAnswer.0', 12)
+            ->assertJsonPath('data.correctAnswer.1', 12.5);
+    }
+
     public function test_incomplete_literacy_content_is_rejected_and_legacy_invalid_content_is_hidden(): void
     {
         $school = $this->createSchool();
@@ -481,6 +533,66 @@ class RestApiTest extends TestCase
             ->assertOk();
     }
 
+    public function test_platform_admin_can_update_school_name_and_registration_code(): void
+    {
+        $platformAdmin = User::factory()->create(['role' => 'platform_admin', 'school_id' => null]);
+        $school = $this->createSchool();
+        $otherSchool = $this->createSchool();
+        $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
+
+        $this->actingAs($teacher)->putJson('/api/v1/platform/schools/'.$school->id, [
+            'name' => 'SD Tidak Diizinkan',
+            'code' => 'KODEGURU',
+        ])->assertForbidden();
+
+        $this->actingAs($platformAdmin)->putJson('/api/v1/platform/schools/'.$school->id, [
+            'code' => $otherSchool->code,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['code']);
+
+        $this->actingAs($platformAdmin)->putJson('/api/v1/platform/schools/'.$school->id, [
+            'name' => 'SD Lentera Diperbarui',
+            'code' => 'kodebaru',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'SD Lentera Diperbarui')
+            ->assertJsonPath('data.code', 'KODEBARU');
+
+        $this->getJson('/api/v1/schools/lookup/KODEBARU')
+            ->assertOk()
+            ->assertJsonPath('data.name', 'SD Lentera Diperbarui');
+        $this->getJson('/api/v1/schools/lookup/'.$school->code)->assertNotFound();
+    }
+
+    public function test_platform_admin_can_delete_school_and_its_related_data(): void
+    {
+        $platformAdmin = User::factory()->create(['role' => 'platform_admin', 'school_id' => null]);
+        $school = $this->createSchool();
+        $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
+        $student = User::factory()->create([
+            'role' => 'student',
+            'school_id' => $school->id,
+            'teacher_id' => $teacher->id,
+        ]);
+        $content = ContentItem::create([
+            'id' => 'school-delete-test-item',
+            'type' => 'numeracy',
+            'school_id' => $school->id,
+            'payload' => ['title' => 'Soal sekolah'],
+        ]);
+
+        $this->actingAs($teacher)->deleteJson('/api/v1/platform/schools/'.$school->id)
+            ->assertForbidden();
+
+        $this->actingAs($platformAdmin)->deleteJson('/api/v1/platform/schools/'.$school->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Sekolah dan seluruh data terkait berhasil dihapus.');
+
+        $this->assertDatabaseMissing('schools', ['id' => $school->id]);
+        $this->assertDatabaseMissing('users', ['id' => $teacher->id]);
+        $this->assertDatabaseMissing('users', ['id' => $student->id]);
+        $this->assertDatabaseMissing('content_items', ['id' => $content->id]);
+    }
+
     public function test_inactive_school_cannot_register_students_or_use_school_api(): void
     {
         $school = $this->createSchool();
@@ -521,6 +633,28 @@ class RestApiTest extends TestCase
             'vocabulary' => [],
             'questions' => [],
             'authorOrSource' => 'Guru Uji',
+        ];
+    }
+
+    private function validNumeracyPayload(string $id): array
+    {
+        return [
+            'id' => $id,
+            'title' => 'Soal Numerasi Uji',
+            'level' => 'fase-b',
+            'levelLabel' => 'Fase B (Kelas 3-4 SD)',
+            'domain' => 'bilangan',
+            'domainLabel' => 'Bilangan',
+            'context' => 'personal',
+            'contextLabel' => 'Konteks Personal',
+            'stimulus' => ['text' => 'Ada beberapa benda untuk dihitung.'],
+            'type' => 'multiple-choice',
+            'question' => 'Pilih jawaban yang benar.',
+            'options' => ['Pilihan A', 'Pilihan B'],
+            'correctAnswer' => ['Pilihan A'],
+            'hint' => 'Baca soal dengan teliti.',
+            'stepByStepSolution' => ['Periksa pilihan jawaban.'],
+            'cognitiveLevel' => 'Pemahaman (Knowing)',
         ];
     }
 

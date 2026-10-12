@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { BellRing, ChevronLeft, ChevronRight, Copy, RefreshCw, Send, Smartphone, Trash2 } from 'lucide-react';
+import { BellRing, Check, ChevronLeft, ChevronRight, Copy, Pencil, RefreshCw, Send, Smartphone, Trash2, X } from 'lucide-react';
 import {
   createPlatformSchool,
   deletePlatformFcmDevice,
+  deletePlatformSchool,
   fetchPlatformFcmDevices,
   fetchPlatformSchools,
   PlatformFcmDevice,
@@ -24,8 +25,11 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [createdSchool, setCreatedSchool] = useState<PlatformSchool | null>(null);
+  const [editingSchool, setEditingSchool] = useState<{ id: number; name: string; code: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingSchoolEdit, setIsSavingSchoolEdit] = useState(false);
+  const [deletingSchoolId, setDeletingSchoolId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [fcmDevices, setFcmDevices] = useState<PlatformFcmDevice[]>([]);
   const [fcmPage, setFcmPage] = useState(1);
@@ -179,6 +183,46 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
       setSchools((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Gagal mengubah status sekolah.');
+    }
+  };
+
+  const handleSaveSchoolEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingSchool) return;
+
+    setError('');
+    setIsSavingSchoolEdit(true);
+    try {
+      const updated = await updatePlatformSchool(editingSchool.id, {
+        name: editingSchool.name.trim(),
+        code: editingSchool.code.trim().toUpperCase(),
+      });
+      setSchools((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEditingSchool(null);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Gagal memperbarui nama dan kode sekolah.');
+    } finally {
+      setIsSavingSchoolEdit(false);
+    }
+  };
+
+  const handleDeleteSchool = async (school: PlatformSchool) => {
+    const relatedData = `${school.teacher_count || 0} akun guru, ${school.student_count || 0} akun siswa, dan seluruh materi sekolah`;
+    if (!window.confirm(
+      `Hapus sekolah "${school.name}" beserta ${relatedData}? Tindakan ini permanen dan tidak dapat dibatalkan.`,
+    )) {
+      return;
+    }
+
+    setDeletingSchoolId(school.id);
+    setError('');
+    try {
+      await deletePlatformSchool(school.id);
+      setSchools((current) => current.filter((item) => item.id !== school.id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Gagal menghapus sekolah.');
+    } finally {
+      setDeletingSchoolId(null);
     }
   };
 
@@ -338,24 +382,94 @@ export const PlatformAdminPanel: React.FC<PlatformAdminPanelProps> = ({ onLogout
             <div className="mt-4 space-y-3">
               {schools.map((school) => (
                 <article key={school.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-bold text-slate-900">{school.name}</h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Kode <span className="font-mono font-bold tracking-wider text-slate-700">{school.code}</span>
-                      {' · '}{school.teacher_count || 0} guru · {school.student_count || 0} siswa
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleToggleSchool(school)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-                      school.is_active
-                        ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {school.is_active ? 'Aktif · Nonaktifkan' : 'Nonaktif · Aktifkan'}
-                  </button>
+                  {editingSchool?.id === school.id ? (
+                    <form onSubmit={(event) => void handleSaveSchoolEdit(event)} className="grid w-full gap-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Nama sekolah
+                        <input
+                          required
+                          maxLength={160}
+                          value={editingSchool.name}
+                          onChange={(event) => setEditingSchool({ ...editingSchool, name: event.target.value })}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Kode sekolah
+                        <input
+                          required
+                          minLength={4}
+                          maxLength={12}
+                          pattern="[A-Za-z0-9]{4,12}"
+                          value={editingSchool.code}
+                          onChange={(event) => setEditingSchool({ ...editingSchool, code: event.target.value.toUpperCase() })}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-violet-600"
+                        />
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={isSavingSchoolEdit}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-violet-800 px-3 py-2 text-xs font-bold text-white hover:bg-violet-900 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          <Check size={14} aria-hidden="true" />
+                          {isSavingSchoolEdit ? 'Menyimpan...' : 'Simpan'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingSchoolEdit}
+                          onClick={() => setEditingSchool(null)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          <X size={14} aria-hidden="true" />
+                          Batal
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-bold text-slate-900">{school.name}</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Kode <span className="font-mono font-bold tracking-wider text-slate-700">{school.code}</span>
+                          {' · '}{school.teacher_count || 0} guru · {school.student_count || 0} siswa
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingSchool({ id: school.id, name: school.name, code: school.code })}
+                          disabled={editingSchool !== null || deletingSchoolId !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                          aria-label={`Edit nama dan kode sekolah ${school.name}`}
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleSchool(school)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                            school.is_active
+                              ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          {school.is_active ? 'Aktif · Nonaktifkan' : 'Nonaktif · Aktifkan'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSchool(school)}
+                          disabled={deletingSchoolId !== null || editingSchool !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
+                          aria-label={`Hapus sekolah ${school.name}`}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                          {deletingSchoolId === school.id ? 'Menghapus...' : 'Hapus'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </article>
               ))}
             </div>

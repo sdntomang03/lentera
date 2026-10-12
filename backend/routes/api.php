@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/platform/schools', [SchoolController::class, 'index']);
             Route::post('/platform/schools', [SchoolController::class, 'store']);
             Route::put('/platform/schools/{school}', [SchoolController::class, 'update']);
+            Route::delete('/platform/schools/{school}', [SchoolController::class, 'destroy']);
         });
     });
 

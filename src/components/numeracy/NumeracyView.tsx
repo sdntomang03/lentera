@@ -103,14 +103,24 @@ export const NumeracyView: React.FC<NumeracyViewProps> = ({
     if (selectedQuestion.type === 'single-choice') {
       correct = userAnswer === selectedQuestion.correctAnswer;
     } else if (selectedQuestion.type === 'multiple-choice') {
-      const expected = selectedQuestion.correctAnswer as string[];
+      const expected = Array.isArray(selectedQuestion.correctAnswer)
+        ? selectedQuestion.correctAnswer
+        : [];
       const actual = (userAnswer as string[]) || [];
       correct =
         expected.length === actual.length &&
         expected.every((item) => actual.includes(item));
     } else if (selectedQuestion.type === 'numeric') {
       const numVal = parseFloat(numericInput.replace(',', '.').trim());
-      correct = Math.abs(numVal - selectedQuestion.correctAnswer) < 0.01;
+      const expectedAnswers = Array.isArray(selectedQuestion.correctAnswer)
+        ? selectedQuestion.correctAnswer
+        : [selectedQuestion.correctAnswer];
+      correct = expectedAnswers.some((answer) => {
+        const numericAnswer = typeof answer === 'number'
+          ? answer
+          : Number(String(answer).replace(',', '.').trim());
+        return Number.isFinite(numericAnswer) && Math.abs(numVal - numericAnswer) < 0.01;
+      });
     }
 
     setIsCorrect(correct);

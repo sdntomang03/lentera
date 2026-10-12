@@ -875,8 +875,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       return;
     }
 
+    let correctAnswer = editingNumeracy.correctAnswer;
+    if (editingNumeracy.type === 'single-choice') {
+      if (!editingNumeracy.options?.includes(String(correctAnswer ?? ''))) {
+        showError('Pilih satu opsi sebagai kunci jawaban.');
+        return;
+      }
+    } else if (editingNumeracy.type === 'multiple-choice') {
+      const answers = Array.isArray(correctAnswer) ? correctAnswer : [];
+      if (answers.length === 0 || !answers.every((answer) => editingNumeracy.options?.includes(String(answer)))) {
+        showError('Pilih minimal satu opsi sebagai kunci jawaban.');
+        return;
+      }
+    } else if (editingNumeracy.type === 'numeric') {
+      const rawAnswers = Array.isArray(correctAnswer)
+        ? correctAnswer.map(String).join('\n')
+        : String(correctAnswer ?? '');
+      const answers = rawAnswers
+        .split(/\r?\n/)
+        .map((answer) => answer.trim())
+        .filter(Boolean)
+        .map((answer) => Number(answer.replace(',', '.')));
+      if (answers.length === 0 || answers.some((answer) => !Number.isFinite(answer))) {
+        showError('Masukkan minimal satu kunci jawaban angka yang valid, satu jawaban per baris.');
+        return;
+      }
+      correctAnswer = answers.length === 1 ? answers[0] : [...new Set(answers)];
+    }
+
     try {
-      const fullNumeracy = editingNumeracy as NumeracyQuestion;
+      const fullNumeracy = { ...editingNumeracy, correctAnswer } as NumeracyQuestion;
       await saveNumeracyToApi(fullNumeracy);
       soundFx.playCorrect();
       confetti({ particleCount: 50, spread: 60 });
@@ -3138,14 +3166,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <select
                     value={editingNumeracy.type}
                     onChange={(e) => {
+                      const type = e.target.value as NumeracyQuestion['type'];
+                      const options = editingNumeracy.options?.length
+                        ? editingNumeracy.options
+                        : ['Pilihan A', 'Pilihan B', 'Pilihan C', 'Pilihan D'];
+                      const currentAnswer = editingNumeracy.correctAnswer;
+                      const correctAnswer = type === 'single-choice'
+                        ? typeof currentAnswer === 'string' && options.includes(currentAnswer)
+                          ? currentAnswer
+                          : options[0]
+                        : type === 'multiple-choice'
+                          ? Array.isArray(currentAnswer)
+                            ? currentAnswer.filter((answer) => typeof answer === 'string' && options.includes(answer))
+                            : typeof currentAnswer === 'string' && options.includes(currentAnswer)
+                              ? [currentAnswer]
+                              : []
+                          : type === 'numeric' && Array.isArray(currentAnswer)
+                            ? currentAnswer.join('\n')
+                            : currentAnswer;
                       setEditingNumeracy({
                         ...editingNumeracy,
-                        type: e.target.value as any,
+                        type,
+                        options: type === 'single-choice' || type === 'multiple-choice' ? options : editingNumeracy.options,
+                        correctAnswer,
                       });
                     }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-700"
                   >
                     <option value="single-choice">Pilihan Ganda Tunggal</option>
+                    <option value="multiple-choice">Pilihan Ganda Kompleks</option>
                     <option value="numeric">Isian Angka (Numeric)</option>
                   </select>
                 </div>
@@ -3183,10 +3232,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 />
               </div>
 
-              {editingNumeracy.type === 'single-choice' && (
+              {(editingNumeracy.type === 'single-choice' || editingNumeracy.type === 'multiple-choice') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Opsi Pilihan Ganda (pilih radio untuk menetapkan kunci):
+                    Opsi Pilihan Ganda ({editingNumeracy.type === 'single-choice' ? 'pilih satu kunci' : 'centang semua kunci'}):
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(editingNumeracy.options || []).map((option, optionIdx) => (
@@ -3199,11 +3248,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         }`}
                       >
                         <input
-                          type="radio"
-                          name="numeracy-correct-answer"
-                          checked={editingNumeracy.correctAnswer === option}
+                          type={editingNumeracy.type === 'single-choice' ? 'radio' : 'checkbox'}
+                          name={editingNumeracy.type === 'single-choice' ? 'numeracy-correct-answer' : undefined}
+                          checked={editingNumeracy.type === 'single-choice'
+                            ? editingNumeracy.correctAnswer === option
+                            : Array.isArray(editingNumeracy.correctAnswer) && editingNumeracy.correctAnswer.includes(option)}
                           aria-label={`Jadikan opsi ${String.fromCharCode(65 + optionIdx)} sebagai jawaban benar`}
-                          onChange={() => setEditingNumeracy({ ...editingNumeracy, correctAnswer: option })}
+                          onChange={() => {
+                            if (editingNumeracy.type === 'single-choice') {
+                              setEditingNumeracy({ ...editingNumeracy, correctAnswer: option });
+                              return;
+                            }
+                            const currentAnswers = Array.isArray(editingNumeracy.correctAnswer)
+                              ? editingNumeracy.correctAnswer.filter((answer): answer is string => typeof answer === 'string')
+                              : [];
+                            const correctAnswer = currentAnswers.includes(option)
+                              ? currentAnswers.filter((answer) => answer !== option)
+                              : [...currentAnswers, option];
+                            setEditingNumeracy({ ...editingNumeracy, correctAnswer });
+                          }}
                           className="h-4 w-4 accent-emerald-700"
                         />
                         <span className="text-xs font-bold text-slate-500">{String.fromCharCode(65 + optionIdx)}.</span>
@@ -3215,12 +3278,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             const options = [...(editingNumeracy.options || [])];
                             const previousOption = options[optionIdx];
                             options[optionIdx] = e.target.value;
+                            const currentAnswer = editingNumeracy.correctAnswer;
+                            const correctAnswer = editingNumeracy.type === 'multiple-choice' && Array.isArray(currentAnswer)
+                              ? currentAnswer.map((answer) => answer === previousOption ? e.target.value : answer)
+                              : currentAnswer === previousOption
+                                ? e.target.value
+                                : currentAnswer;
                             setEditingNumeracy({
                               ...editingNumeracy,
                               options,
-                              correctAnswer: editingNumeracy.correctAnswer === previousOption
-                                ? e.target.value
-                                : editingNumeracy.correctAnswer,
+                              correctAnswer,
                             });
                           }}
                           className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none"
@@ -3231,12 +3298,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             aria-label={`Hapus opsi ${String.fromCharCode(65 + optionIdx)}`}
                             onClick={() => {
                               const options = (editingNumeracy.options || []).filter((_, idx) => idx !== optionIdx);
+                              const currentAnswer = editingNumeracy.correctAnswer;
+                              const correctAnswer = editingNumeracy.type === 'multiple-choice' && Array.isArray(currentAnswer)
+                                ? currentAnswer.filter((answer) => answer !== option)
+                                : options.includes(String(currentAnswer))
+                                  ? currentAnswer
+                                  : options[0] || '';
                               setEditingNumeracy({
                                 ...editingNumeracy,
                                 options,
-                                correctAnswer: options.includes(String(editingNumeracy.correctAnswer))
-                                  ? editingNumeracy.correctAnswer
-                                  : options[0] || '',
+                                correctAnswer,
                               });
                             }}
                             className="text-slate-400 hover:text-red-600"
@@ -3279,6 +3350,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </option>
                         ))}
                       </select>
+                    </>
+                  ) : editingNumeracy.type === 'multiple-choice' ? (
+                    <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
+                      Kunci jawaban ditentukan dengan mencentang opsi yang benar di atas.
+                    </p>
+                  ) : editingNumeracy.type === 'numeric' ? (
+                    <>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Kunci Jawaban Angka (satu jawaban per baris):
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={Array.isArray(editingNumeracy.correctAnswer)
+                          ? editingNumeracy.correctAnswer.join('\n')
+                          : String(editingNumeracy.correctAnswer ?? '')}
+                        onChange={(e) => setEditingNumeracy({ ...editingNumeracy, correctAnswer: e.target.value })}
+                        placeholder={'Contoh:\n12\n12,5'}
+                        className="w-full resize-y rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                      />
                     </>
                   ) : (
                     <>

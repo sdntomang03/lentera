@@ -123,6 +123,33 @@ function isLiteracyPassage(value: unknown): value is LiteracyPassage {
 
 function isNumeracyQuestion(value: unknown): value is NumeracyQuestion {
   if (!isRecord(value) || !isRecord(value.stimulus)) return false;
+  const isNumericAnswer = (answer: unknown) => {
+    const isNumber = (candidate: unknown) =>
+      (typeof candidate === 'number' && Number.isFinite(candidate))
+      || (typeof candidate === 'string'
+        && candidate.trim() !== ''
+        && Number.isFinite(Number(candidate.replace(',', '.'))));
+    return Array.isArray(answer)
+      ? answer.length > 0 && answer.every(isNumber)
+      : isNumber(answer);
+  };
+  const options = Array.isArray(value.options)
+    ? value.options.filter((option): option is string => typeof option === 'string' && option.trim().length > 0)
+    : [];
+  const isChoiceQuestion = value.type === 'single-choice' || value.type === 'multiple-choice';
+  const hasValidOptions = Array.isArray(value.options)
+    && options.length === value.options.length
+    && options.length >= 2;
+  const hasValidAnswer = value.type === 'single-choice'
+    ? hasValidOptions && typeof value.correctAnswer === 'string' && options.includes(value.correctAnswer)
+    : value.type === 'multiple-choice'
+      ? hasValidOptions
+        && Array.isArray(value.correctAnswer)
+        && value.correctAnswer.length > 0
+        && value.correctAnswer.every((answer) => typeof answer === 'string' && options.includes(answer))
+      : value.type === 'numeric'
+        ? isNumericAnswer(value.correctAnswer)
+        : true;
   return (
     typeof value.id === 'string'
     && typeof value.title === 'string'
@@ -134,6 +161,7 @@ function isNumeracyQuestion(value: unknown): value is NumeracyQuestion {
     && typeof value.contextLabel === 'string'
     && typeof value.question === 'string'
     && ['single-choice', 'multiple-choice', 'matching', 'numeric', 'true-false'].includes(String(value.type))
+    && (!isChoiceQuestion && value.type !== 'numeric' || hasValidAnswer)
     && Object.prototype.hasOwnProperty.call(value, 'correctAnswer')
     && typeof value.cognitiveLevel === 'string'
     && typeof value.hint === 'string'

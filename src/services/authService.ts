@@ -197,12 +197,19 @@ export async function createPlatformSchool(data: {
   return response.data;
 }
 
-export async function updatePlatformSchool(schoolId: number, data: { is_active: boolean }): Promise<PlatformSchool> {
+export async function updatePlatformSchool(
+  schoolId: number,
+  data: { name?: string; code?: string; is_active?: boolean },
+): Promise<PlatformSchool> {
   const response = await apiRequest<{ data: PlatformSchool }>(`/platform/schools/${schoolId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
   return response.data;
+}
+
+export async function deletePlatformSchool(schoolId: number): Promise<void> {
+  await apiRequest(`/platform/schools/${schoolId}`, { method: 'DELETE' });
 }
 
 export async function logout(): Promise<void> {
