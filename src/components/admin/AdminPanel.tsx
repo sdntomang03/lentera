@@ -20,6 +20,7 @@ import {
   fetchNumeracyFromApi,
   saveNumeracyToApi,
   deleteNumeracyFromApi,
+  uploadContentImage,
   fetchReadingPracticeFromApi,
   saveReadingPracticeToApi,
   deleteReadingPracticeFromApi,
@@ -67,6 +68,86 @@ interface AdminPanelProps {
 
 const AVATAR_OPTIONS = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '⭐', '📚', '🎨', '🌟', '🦁'];
 const DEFAULT_STUDENT_GRADE_LEVEL = SUPPORTED_GRADE_LEVEL_OPTIONS[1];
+
+interface ImageUploadFieldProps {
+  label: string;
+  value?: string;
+  alt: string;
+  onChange: (image: string | undefined) => void;
+  onUploadingChange: (isUploading: boolean) => void;
+}
+
+const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
+  label,
+  value,
+  alt,
+  onChange,
+  onUploadingChange,
+}) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!supportedTypes.includes(file.type)) {
+      setError('Gunakan gambar JPG, PNG, WebP, atau GIF.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Ukuran gambar maksimal 2 MB.');
+      return;
+    }
+
+    setError('');
+    setIsUploading(true);
+    onUploadingChange(true);
+    try {
+      onChange(await uploadContentImage(file));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Gagal mengunggah gambar.');
+    } finally {
+      setIsUploading(false);
+      onUploadingChange(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-[10px] text-slate-500 font-bold">{label} (opsional):</label>
+      {value && (
+        <div className="relative w-fit">
+          <img src={value} alt={alt} className="max-h-48 max-w-full rounded-xl border border-slate-200 object-contain" />
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              onChange(undefined);
+            }}
+            className="absolute -right-2 -top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-bold text-white shadow"
+          >
+            Hapus
+          </button>
+        </div>
+      )}
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        disabled={isUploading}
+        onChange={handleFileChange}
+        className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-bold file:text-slate-700 hover:file:bg-slate-200 disabled:opacity-60"
+      />
+      <p className="text-[10px] text-slate-400">
+        {isUploading ? 'Mengunggah gambar...' : 'JPG, PNG, WebP, atau GIF; maksimal 2 MB.'}
+      </p>
+      {error && <p role="alert" className="text-[11px] font-medium text-red-600">{error}</p>}
+    </div>
+  );
+};
 
 function normalizeGradeLevel(gradeLevel: string | undefined): string {
   const normalized = gradeLevel?.toLowerCase() ?? '';
@@ -160,6 +241,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isPassageEditorOpen, setIsPassageEditorOpen] = useState<boolean>(false);
   const [editingPassage, setEditingPassage] = useState<Partial<LiteracyPassage> | null>(null);
   const [isGeneratingPassage, setIsGeneratingPassage] = useState<boolean>(false);
+  const [activeImageUploads, setActiveImageUploads] = useState(0);
 
   // Numeracy Editor Modal
   const [isNumeracyEditorOpen, setIsNumeracyEditorOpen] = useState<boolean>(false);
@@ -565,6 +647,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showError('Mohon lengkapi judul bacaan.');
       return;
     }
+    if (activeImageUploads > 0) {
+      showError('Tunggu hingga unggahan gambar selesai sebelum menyimpan bacaan.');
+      return;
+    }
 
     try {
       const fullPassage = editingPassage as LiteracyPassage;
@@ -872,6 +958,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     e.preventDefault();
     if (!editingNumeracy || !editingNumeracy.title || !editingNumeracy.id) {
       showError('Mohon lengkapi judul soal numerasi.');
+      return;
+    }
+    if (activeImageUploads > 0) {
+      showError('Tunggu hingga unggahan gambar selesai sebelum menyimpan soal.');
       return;
     }
 
@@ -2867,6 +2957,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold"
                     />
 
+                    <ImageUploadField
+                      label="Gambar pendukung soal literasi"
+                      value={q.image}
+                      alt={`Gambar pendukung soal ${qIdx + 1}`}
+                      onChange={(image) => setEditingPassage((previous) => {
+                        if (!previous) return previous;
+                        const questions = (previous.questions || []).map((question) =>
+                          question.id === q.id ? { ...question, image } : question,
+                        );
+                        return { ...previous, questions };
+                      })}
+                      onUploadingChange={(isUploading) => setActiveImageUploads((count) =>
+                        Math.max(0, count + (isUploading ? 1 : -1)),
+                      )}
+                    />
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <label className="text-[10px] text-slate-500 font-bold">Level Kognitif AKM:</label>
@@ -3219,6 +3325,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-700"
                 />
               </div>
+
+              <ImageUploadField
+                label="Gambar pendukung stimulus numerasi"
+                value={editingNumeracy.stimulus?.image}
+                alt={`Gambar pendukung ${editingNumeracy.title || 'soal numerasi'}`}
+                onChange={(image) => setEditingNumeracy((previous) => previous ? {
+                  ...previous,
+                  stimulus: {
+                    ...(previous.stimulus || { text: '' }),
+                    image,
+                  },
+                } : previous)}
+                onUploadingChange={(isUploading) => setActiveImageUploads((count) =>
+                  Math.max(0, count + (isUploading ? 1 : -1)),
+                )}
+              />
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Pertanyaan Soal:</label>

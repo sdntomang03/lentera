@@ -6,6 +6,8 @@ use App\Models\ContentItem;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -222,8 +224,19 @@ class RestApiTest extends TestCase
 
         $school = $this->createSchool();
         $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
+        $passage = $this->validPassagePayload('lit-test');
+        $passage['questions'] = [[
+            'id' => 'lit-question-image',
+            'type' => 'single-choice',
+            'question' => 'Apa yang terlihat pada gambar?',
+            'options' => ['Gambar A', 'Gambar B'],
+            'correctAnswers' => 'Gambar A',
+            'explanation' => 'Perhatikan gambar pendukung.',
+            'cognitiveLevel' => 'Menemukan Informasi (L1)',
+            'image' => '/api/v1/content/images/literacy.png',
+        ]];
         $this->actingAs($teacher)->postJson('/api/v1/content/passages', [
-            'data' => $this->validPassagePayload('lit-test'),
+            'data' => $passage,
         ])->assertCreated();
 
         $this->assertDatabaseHas('content_items', [
@@ -233,7 +246,32 @@ class RestApiTest extends TestCase
         $this->assertInstanceOf(ContentItem::class, ContentItem::find('lit-test'));
         $this->actingAs($teacher)->getJson('/api/v1/content/passages')
             ->assertOk()
-            ->assertJsonPath('data.0.title', 'Bacaan Uji');
+            ->assertJsonPath('data.0.title', 'Bacaan Uji')
+            ->assertJsonPath('data.0.questions.0.image', '/api/v1/content/images/literacy.png');
+    }
+
+    public function test_teacher_can_upload_and_students_can_view_question_images(): void
+    {
+        Storage::fake('public');
+        $school = $this->createSchool();
+        $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
+        $image = UploadedFile::fake()->image('diagram.png', 32, 32);
+
+        $this->post('/api/v1/content/images', ['image' => $image], ['Accept' => 'application/json'])
+            ->assertUnauthorized();
+
+        $upload = $this->actingAs($teacher)
+            ->post('/api/v1/content/images', ['image' => $image], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonStructure(['url']);
+
+        $imageUrl = $upload->json('url');
+        $filename = basename((string) parse_url($imageUrl, PHP_URL_PATH));
+        Storage::disk('public')->assertExists('question-images/'.$filename);
+
+        $this->get((string) parse_url($imageUrl, PHP_URL_PATH))
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
     }
 
     public function test_students_receive_valid_multiple_choice_questions_and_invalid_questions_are_hidden(): void
@@ -241,12 +279,14 @@ class RestApiTest extends TestCase
         $school = $this->createSchool();
         $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
         $question = $this->validNumeracyPayload('num-choice-test');
+        $question['stimulus']['image'] = '/api/v1/content/images/numeracy.png';
 
         $this->actingAs($teacher)->postJson('/api/v1/content/questions', [
             'data' => $question,
         ])->assertCreated()
             ->assertJsonPath('data.options.0', 'Pilihan A')
-            ->assertJsonPath('data.correctAnswer.0', 'Pilihan A');
+            ->assertJsonPath('data.correctAnswer.0', 'Pilihan A')
+            ->assertJsonPath('data.stimulus.image', '/api/v1/content/images/numeracy.png');
 
         $invalidQuestion = $this->validNumeracyPayload('num-choice-invalid');
         unset($invalidQuestion['options']);
@@ -269,6 +309,7 @@ class RestApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', 'num-choice-test')
+            ->assertJsonPath('data.0.stimulus.image', '/api/v1/content/images/numeracy.png')
             ->assertJsonPath('data.0.options.1', 'Pilihan B');
     }
 

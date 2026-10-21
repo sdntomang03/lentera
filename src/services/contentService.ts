@@ -103,6 +103,7 @@ function isLiteracyPassage(value: unknown): value is LiteracyPassage {
         || typeof question.type !== 'string'
         || typeof question.explanation !== 'string'
         || typeof question.cognitiveLevel !== 'string'
+        || (question.image !== undefined && typeof question.image !== 'string')
         || !['single-choice', 'multiple-choice', 'true-false', 'sequencing', 'short-answer'].includes(question.type)
         || !(
           typeof question.correctAnswers === 'string'
@@ -166,6 +167,7 @@ function isNumeracyQuestion(value: unknown): value is NumeracyQuestion {
     && typeof value.cognitiveLevel === 'string'
     && typeof value.hint === 'string'
     && typeof value.stimulus.text === 'string'
+    && (value.stimulus.image === undefined || typeof value.stimulus.image === 'string')
     && Array.isArray(value.stepByStepSolution)
   );
 }
@@ -218,6 +220,19 @@ export async function saveNumeracyToApi(question: NumeracyQuestion): Promise<voi
 
 export async function deleteNumeracyFromApi(questionId: string): Promise<void> {
   await apiRequest(`/content/questions/${encodeURIComponent(questionId)}`, { method: 'DELETE' });
+}
+
+export async function uploadContentImage(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('image', file);
+  const response = await apiRequest<{ url: unknown }>('/content/images', {
+    method: 'POST',
+    body: formData,
+  });
+  if (typeof response.url !== 'string' || response.url.trim() === '') {
+    throw new Error('Respons unggahan gambar tidak valid.');
+  }
+  return response.url;
 }
 
 function isReadingPracticeItem(value: unknown): value is ReadingPracticeItem {

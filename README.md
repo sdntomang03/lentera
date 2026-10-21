@@ -41,7 +41,7 @@ Lentera adalah aplikasi React/Vite untuk pembelajaran literasi dan numerasi. Dat
    npm run dev
    ```
 
-Tips belajar AI, chatbot Endzi, serta generator bacaan/soal guru menggunakan DeepSeek. Atur `DEEPSEEK_API_KEY` aktif pada file `.env` di root proyek, lalu mulai ulang server Vite/Node agar konfigurasi dimuat kembali. Di ruang kerja guru, editor Literasi membuat bacaan, kosakata, empat kuis pilihan ganda, kunci jawaban, dan pembahasan; editor Numerasi membuat stimulus, opsi, kunci, petunjuk, dan langkah penyelesaian. Tab Latihan Membaca Fase A mengelola materi suku kata, pencocokan kata dengan gambar/emoji, dan kalimat pendek; materi disimpan di database dan dimuat pada latihan siswa. Periksa hasil AI sebelum menyimpannya ke Database. Jika DeepSeek bermasalah, fitur Tips menampilkan tips cadangan; generator materi menampilkan pesan kegagalan agar konten yang tidak lengkap tidak tersimpan.
+Tips belajar AI, chatbot Endzi, serta generator bacaan/soal guru menggunakan DeepSeek. Atur `DEEPSEEK_API_KEY` aktif pada file `.env` di root proyek, lalu mulai ulang server Vite/Node agar konfigurasi dimuat kembali. Di ruang kerja guru, editor Literasi membuat bacaan, kosakata, kuis, kunci jawaban, dan pembahasan; editor Numerasi membuat stimulus, opsi, kunci, petunjuk, dan langkah penyelesaian. Guru dapat mengunggah gambar pendukung pada setiap soal Literasi atau stimulus Numerasi (JPG, PNG, WebP, atau GIF, maksimal 2 MB); gambar tersimpan di disk publik Laravel dan tampil saat siswa mengerjakan soal. Tab Latihan Membaca Fase A mengelola materi suku kata, pencocokan kata dengan gambar/emoji, dan kalimat pendek; materi disimpan di database dan dimuat pada latihan siswa. Periksa hasil AI sebelum menyimpannya ke Database. Jika DeepSeek bermasalah, fitur Tips menampilkan tips cadangan; generator materi menampilkan pesan kegagalan agar konten yang tidak lengkap tidak tersimpan.
 
 ### Multi-sekolah
 
@@ -59,6 +59,8 @@ Semua endpoint aplikasi menggunakan prefix `/api/v1`.
 | `POST`                         | `/auth/login`                             | Publik; mengembalikan token Sanctum |
 | `GET`                          | `/auth/me`                                | Token                               |
 | `POST`                         | `/auth/logout`                            | Token                               |
+| `POST`                         | `/content/images`                         | Guru; unggah gambar soal (maks. 2 MB) |
+| `GET`                          | `/content/images/{filename}`              | Publik; menampilkan gambar soal     |
 | `GET`                          | `/content/passages`, `/content/questions`, `/content/reading-practice` | Token; materi sekolah |
 | `GET`                          | `/schools/lookup/{code}`                 | Publik; validasi kode sekolah        |
 | `POST`, `PUT`, `DELETE`        | `/content/{type}[/{id}]`                  | Guru                                |

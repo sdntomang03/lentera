@@ -340,6 +340,14 @@ export const NumeracyView: React.FC<NumeracyViewProps> = ({
                 {selectedQuestion.stimulus.text}
               </div>
 
+              {selectedQuestion.stimulus.image && (
+                <img
+                  src={selectedQuestion.stimulus.image}
+                  alt={`Gambar stimulus untuk ${selectedQuestion.title}`}
+                  className="max-h-96 w-full rounded-2xl border border-slate-200 bg-white object-contain"
+                />
+              )}
+
               {/* Interactive Visuals / Charts */}
               {selectedQuestion.stimulus.chartType === 'bar' && selectedQuestion.stimulus.chartData && (
                 <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200">

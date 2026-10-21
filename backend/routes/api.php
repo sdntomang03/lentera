@@ -13,6 +13,9 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
     Route::get('/schools/lookup/{code}', [SchoolController::class, 'lookup'])->middleware('throttle:20,1');
+    Route::get('/content/images/{filename}', [ContentController::class, 'showImage'])
+        ->where('filename', '[A-Za-z0-9._-]+')
+        ->name('content.images.show');
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
@@ -28,6 +31,7 @@ Route::prefix('v1')->group(function (): void {
                 ->whereIn('type', ['passages', 'questions', 'reading-practice']);
 
             Route::middleware('teacher')->group(function (): void {
+                Route::post('/content/images', [ContentController::class, 'uploadImage']);
                 Route::put('/me/profile', [SettingController::class, 'updateOwnProfile']);
                 Route::post('/content/{type}', [ContentController::class, 'store'])
                     ->whereIn('type', ['passages', 'questions', 'reading-practice']);

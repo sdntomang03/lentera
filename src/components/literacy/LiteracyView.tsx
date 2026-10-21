@@ -553,6 +553,14 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
 
                         <p className="text-sm font-semibold text-slate-800">{q.question}</p>
 
+                        {q.image && (
+                          <img
+                            src={q.image}
+                            alt={`Gambar untuk soal ${qIndex + 1}`}
+                            className="max-h-72 w-full rounded-xl border border-slate-200 bg-white object-contain"
+                          />
+                        )}
+
                         {/* Question Types */}
                         {q.type === 'single-choice' && q.options && (
                           <div className="space-y-2 pt-1">

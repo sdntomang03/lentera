@@ -33,6 +33,7 @@ export interface LiteracyQuestion {
   id: string;
   type: 'single-choice' | 'multiple-choice' | 'true-false' | 'sequencing' | 'short-answer';
   question: string;
+  image?: string;
   options?: string[]; // for single and multiple choice
   correctAnswers: string | string[] | boolean | number[]; // handles single, multiple choice or index order
   explanation: string;
@@ -79,6 +80,7 @@ export interface NumeracyQuestion {
     chartType?: 'bar' | 'pie' | 'grid' | 'table' | 'number-line';
     chartData?: any;
     imageDescription?: string;
+    image?: string;
   };
   type: 'single-choice' | 'multiple-choice' | 'matching' | 'numeric' | 'true-false';
   question: string;

@@ -7,11 +7,36 @@ use App\Models\ContentItem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class ContentController extends Controller
 {
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpeg,png,webp,gif', 'max:2048'],
+        ]);
+
+        $path = $request->file('image')->storePublicly('question-images', 'public');
+        abort_unless(is_string($path), 500, 'Gagal menyimpan gambar soal ke penyimpanan.');
+
+        return response()->json([
+            'url' => route('content.images.show', ['filename' => basename($path)]),
+        ], 201);
+    }
+
+    public function showImage(string $filename)
+    {
+        $path = 'question-images/'.$filename;
+        abort_unless(basename($filename) === $filename && Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path, $filename, [
+            'Cache-Control' => 'public, max-age=31536000, immutable',
+        ]);
+    }
+
     public function index(Request $request, string $type): JsonResponse
     {
         $kind = $this->contentKind($type);
@@ -122,6 +147,7 @@ class ContentController extends Controller
                 'data.questions.*.correctAnswers' => ['required'],
                 'data.questions.*.explanation' => ['required', 'string'],
                 'data.questions.*.cognitiveLevel' => ['required', 'string'],
+                'data.questions.*.image' => ['nullable', 'string', 'max:2048'],
                 'data.questions.*.options' => ['nullable', 'array'],
                 'data.questions.*.sequenceItems' => ['nullable', 'array'],
                 'data.authorOrSource' => ['required', 'string'],
@@ -136,6 +162,7 @@ class ContentController extends Controller
             'data.contextLabel' => ['required', 'string'],
             'data.stimulus' => ['required', 'array'],
             'data.stimulus.text' => ['required', 'string'],
+            'data.stimulus.image' => ['nullable', 'string', 'max:2048'],
             'data.question' => ['required', 'string'],
             'data.type' => ['required', 'in:single-choice,multiple-choice,matching,numeric,true-false'],
             'data.options' => ['required_if:data.type,single-choice,multiple-choice', 'array', 'min:2'],
