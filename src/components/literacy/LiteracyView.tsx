@@ -4,6 +4,7 @@ import { LITERACY_PASSAGES } from '../../data/literacyData';
 import { LiteracyPassage, VocabItem, EducationLevel } from '../../types';
 import { SpeechReader, soundFx } from '../../utils/audio';
 import { formatSecondsToMinutes } from '../../utils/dailyChallenge';
+import { includeLegacyImage, plainTextFromRichText, sanitizeRichText } from '../../utils/richText';
 
 interface LiteracyViewProps {
   onPassageCompleted: (
@@ -129,7 +130,10 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
       SpeechReader.stop();
       setIsPlayingAudio(false);
     } else {
-      const fullText = `${selectedPassage.title}. ${selectedPassage.paragraphs.join(' ')}`;
+      const passageText = selectedPassage.contentHtml
+        ? plainTextFromRichText(selectedPassage.contentHtml)
+        : selectedPassage.paragraphs.join(' ');
+      const fullText = `${selectedPassage.title}. ${passageText}`;
       setIsPlayingAudio(true);
       SpeechReader.speak(fullText, {
         rate: speechRate,
@@ -171,9 +175,15 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
     selectedPassage.questions.forEach((q) => {
       const userAns = quizAnswers[q.id];
 
-      if (q.type === 'single-choice' || q.type === 'short-answer') {
+      if (q.type === 'single-choice') {
         const correctOpt = Array.isArray(q.correctAnswers) ? q.correctAnswers[0] : q.correctAnswers;
         if (userAns === correctOpt) correctCount++;
+      } else if (q.type === 'short-answer') {
+        const correctAnswers = Array.isArray(q.correctAnswers) ? q.correctAnswers : [q.correctAnswers];
+        if (correctAnswers.some((answer) =>
+          String(userAns || '').trim().toLocaleLowerCase('id-ID')
+          === String(answer).trim().toLocaleLowerCase('id-ID'),
+        )) correctCount++;
       } else if (q.type === 'true-false') {
         if (userAns === q.correctAnswers) correctCount++;
       } else if (q.type === 'multiple-choice') {
@@ -463,13 +473,27 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
 
               {/* Text Paragraphs */}
               <div className={`space-y-5 leading-relaxed text-slate-800 font-reading ${fontSize}`}>
-                {selectedPassage.paragraphs.map((p, pIdx) => {
-                  return (
-                    <p key={pIdx} className="text-justify indent-6">
-                      {p}
-                    </p>
-                  );
-                })}
+                {selectedPassage.contentHtml ? (
+                  <div
+                    className="rich-text-content"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeRichText(includeLegacyImage(selectedPassage.contentHtml, selectedPassage.image)),
+                    }}
+                  />
+                ) : (
+                  selectedPassage.paragraphs.map((paragraph, index) => (
+                    <React.Fragment key={index}>
+                      <p className="text-justify indent-6">{paragraph}</p>
+                      {index === 0 && selectedPassage.image && (
+                        <img
+                          src={selectedPassage.image}
+                          alt={`Ilustrasi bacaan ${selectedPassage.title}`}
+                          className="max-h-96 w-full rounded-2xl border border-slate-200 bg-white object-contain"
+                        />
+                      )}
+                    </React.Fragment>
+                  ))
+                )}
               </div>
 
               {/* Moral / Takeaway */}
@@ -551,9 +575,18 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
                           </span>
                         </div>
 
-                        <p className="text-sm font-semibold text-slate-800">{q.question}</p>
+                        {q.questionHtml ? (
+                          <div
+                            className="rich-text-content text-sm font-semibold text-slate-800"
+                            dangerouslySetInnerHTML={{
+                              __html: sanitizeRichText(includeLegacyImage(q.questionHtml, q.image)),
+                            }}
+                          />
+                        ) : (
+                          <p className="text-sm font-semibold text-slate-800">{q.question}</p>
+                        )}
 
-                        {q.image && (
+                        {q.image && !q.questionHtml && (
                           <img
                             src={q.image}
                             alt={`Gambar untuk soal ${qIndex + 1}`}
@@ -607,6 +640,21 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
                               );
                             })}
                           </div>
+                        )}
+
+                        {q.type === 'short-answer' && (
+                          <input
+                            type="text"
+                            disabled={quizSubmitted}
+                            value={String(quizAnswers[q.id] ?? '')}
+                            onChange={(event) => setQuizAnswers((previous) => ({
+                              ...previous,
+                              [q.id]: event.target.value,
+                            }))}
+                            placeholder="Tuliskan jawabanmu di sini"
+                            aria-label={`Jawaban isian soal ${qIndex + 1}`}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600 disabled:bg-slate-100"
+                          />
                         )}
 
                         {q.type === 'true-false' && (
@@ -705,7 +753,11 @@ export const LiteracyView: React.FC<LiteracyViewProps> = ({
                 {!quizSubmitted ? (
                   <button
                     onClick={handleQuizSubmit}
-                    className="w-full mt-6 py-3 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold text-sm transition-colors shadow-xs"
+                    disabled={selectedPassage.questions.some((question) =>
+                      question.type === 'short-answer'
+                      && !String(quizAnswers[question.id] || '').trim(),
+                    )}
+                    className="w-full mt-6 py-3 bg-teal-700 hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-colors shadow-xs"
                   >
                     Periksa Jawaban Saya
                   </button>

@@ -234,7 +234,9 @@ class RestApiTest extends TestCase
             'explanation' => 'Perhatikan gambar pendukung.',
             'cognitiveLevel' => 'Menemukan Informasi (L1)',
             'image' => '/api/v1/content/images/literacy.png',
+            'questionHtml' => '<p>Apa yang terlihat <img src="/api/v1/content/images/inline.png" alt="ilustrasi"> pada gambar?</p>',
         ]];
+        $passage['contentHtml'] = '<p>Isi bacaan.</p><img src="/api/v1/content/images/passage-inline.png" alt="bacaan">';
         $this->actingAs($teacher)->postJson('/api/v1/content/passages', [
             'data' => $passage,
         ])->assertCreated();
@@ -247,7 +249,10 @@ class RestApiTest extends TestCase
         $this->actingAs($teacher)->getJson('/api/v1/content/passages')
             ->assertOk()
             ->assertJsonPath('data.0.title', 'Bacaan Uji')
-            ->assertJsonPath('data.0.questions.0.image', '/api/v1/content/images/literacy.png');
+            ->assertJsonPath('data.0.image', '/api/v1/content/images/passage.png')
+            ->assertJsonPath('data.0.contentHtml', $passage['contentHtml'])
+            ->assertJsonPath('data.0.questions.0.image', '/api/v1/content/images/literacy.png')
+            ->assertJsonPath('data.0.questions.0.questionHtml', $passage['questions'][0]['questionHtml']);
     }
 
     public function test_teacher_can_upload_and_students_can_view_question_images(): void
@@ -280,13 +285,19 @@ class RestApiTest extends TestCase
         $teacher = User::factory()->create(['role' => 'teacher', 'school_id' => $school->id]);
         $question = $this->validNumeracyPayload('num-choice-test');
         $question['stimulus']['image'] = '/api/v1/content/images/numeracy.png';
+        $question['stimulus']['textHtml'] = '<p>Stimulus <img src="/api/v1/content/images/stimulus-inline.png" alt="stimulus"></p>';
+        $question['image'] = '/api/v1/content/images/numeracy-question.png';
+        $question['questionHtml'] = '<p>Pertanyaan <img src="/api/v1/content/images/question-inline.png" alt="soal"></p>';
 
         $this->actingAs($teacher)->postJson('/api/v1/content/questions', [
             'data' => $question,
         ])->assertCreated()
             ->assertJsonPath('data.options.0', 'Pilihan A')
             ->assertJsonPath('data.correctAnswer.0', 'Pilihan A')
-            ->assertJsonPath('data.stimulus.image', '/api/v1/content/images/numeracy.png');
+            ->assertJsonPath('data.stimulus.image', '/api/v1/content/images/numeracy.png')
+            ->assertJsonPath('data.image', '/api/v1/content/images/numeracy-question.png')
+            ->assertJsonPath('data.stimulus.textHtml', $question['stimulus']['textHtml'])
+            ->assertJsonPath('data.questionHtml', $question['questionHtml']);
 
         $invalidQuestion = $this->validNumeracyPayload('num-choice-invalid');
         unset($invalidQuestion['options']);
@@ -310,6 +321,9 @@ class RestApiTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', 'num-choice-test')
             ->assertJsonPath('data.0.stimulus.image', '/api/v1/content/images/numeracy.png')
+            ->assertJsonPath('data.0.image', '/api/v1/content/images/numeracy-question.png')
+            ->assertJsonPath('data.0.stimulus.textHtml', $question['stimulus']['textHtml'])
+            ->assertJsonPath('data.0.questionHtml', $question['questionHtml'])
             ->assertJsonPath('data.0.options.1', 'Pilihan B');
     }
 
@@ -670,6 +684,7 @@ class RestApiTest extends TestCase
             'estimatedReadTimeMinutes' => 1,
             'wordCount' => 10,
             'summary' => 'Ringkasan bacaan uji.',
+            'image' => '/api/v1/content/images/passage.png',
             'paragraphs' => ['Isi bacaan uji.'],
             'vocabulary' => [],
             'questions' => [],

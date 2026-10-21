@@ -33,6 +33,7 @@ export interface LiteracyQuestion {
   id: string;
   type: 'single-choice' | 'multiple-choice' | 'true-false' | 'sequencing' | 'short-answer';
   question: string;
+  questionHtml?: string;
   image?: string;
   options?: string[]; // for single and multiple choice
   correctAnswers: string | string[] | boolean | number[]; // handles single, multiple choice or index order
@@ -52,6 +53,8 @@ export interface LiteracyPassage {
   wordCount: number;
   summary: string;
   paragraphs: string[];
+  contentHtml?: string;
+  image?: string;
   vocabulary: VocabItem[];
   questions: LiteracyQuestion[];
   moralOrTakeaway?: string;
@@ -77,6 +80,7 @@ export interface NumeracyQuestion {
   contextLabel: string;
   stimulus: {
     text: string;
+    textHtml?: string;
     chartType?: 'bar' | 'pie' | 'grid' | 'table' | 'number-line';
     chartData?: any;
     imageDescription?: string;
@@ -84,6 +88,8 @@ export interface NumeracyQuestion {
   };
   type: 'single-choice' | 'multiple-choice' | 'matching' | 'numeric' | 'true-false';
   question: string;
+  questionHtml?: string;
+  image?: string;
   options?: string[];
   matchingPairs?: { left: string; right: string }[];
   correctAnswer: any; // string, string[], number, or boolean

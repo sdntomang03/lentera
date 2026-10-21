@@ -88,6 +88,8 @@ function isLiteracyPassage(value: unknown): value is LiteracyPassage {
     && typeof value.genre === 'string'
     && typeof value.genreLabel === 'string'
     && typeof value.summary === 'string'
+    && (value.contentHtml === undefined || typeof value.contentHtml === 'string')
+    && (value.image === undefined || typeof value.image === 'string')
     && typeof value.estimatedReadTimeMinutes === 'number'
     && typeof value.wordCount === 'number'
     && typeof value.authorOrSource === 'string'
@@ -103,6 +105,7 @@ function isLiteracyPassage(value: unknown): value is LiteracyPassage {
         || typeof question.type !== 'string'
         || typeof question.explanation !== 'string'
         || typeof question.cognitiveLevel !== 'string'
+        || (question.questionHtml !== undefined && typeof question.questionHtml !== 'string')
         || (question.image !== undefined && typeof question.image !== 'string')
         || !['single-choice', 'multiple-choice', 'true-false', 'sequencing', 'short-answer'].includes(question.type)
         || !(
@@ -161,12 +164,15 @@ function isNumeracyQuestion(value: unknown): value is NumeracyQuestion {
     && typeof value.context === 'string'
     && typeof value.contextLabel === 'string'
     && typeof value.question === 'string'
+    && (value.questionHtml === undefined || typeof value.questionHtml === 'string')
+    && (value.image === undefined || typeof value.image === 'string')
     && ['single-choice', 'multiple-choice', 'matching', 'numeric', 'true-false'].includes(String(value.type))
     && (!isChoiceQuestion && value.type !== 'numeric' || hasValidAnswer)
     && Object.prototype.hasOwnProperty.call(value, 'correctAnswer')
     && typeof value.cognitiveLevel === 'string'
     && typeof value.hint === 'string'
     && typeof value.stimulus.text === 'string'
+    && (value.stimulus.textHtml === undefined || typeof value.stimulus.textHtml === 'string')
     && (value.stimulus.image === undefined || typeof value.stimulus.image === 'string')
     && Array.isArray(value.stepByStepSolution)
   );

@@ -20,7 +20,6 @@ import {
   fetchNumeracyFromApi,
   saveNumeracyToApi,
   deleteNumeracyFromApi,
-  uploadContentImage,
   fetchReadingPracticeFromApi,
   saveReadingPracticeToApi,
   deleteReadingPracticeFromApi,
@@ -45,6 +44,8 @@ import {
   parseStudentImportFile,
   StudentImportResponse,
 } from '../../services/studentImportService';
+import { RichTextEditor } from './RichTextEditor';
+import { includeLegacyImage, richTextFromPlainText } from '../../utils/richText';
 
 export interface TrashItem {
   id: string;
@@ -68,86 +69,6 @@ interface AdminPanelProps {
 
 const AVATAR_OPTIONS = ['👦', '👧', '🧑', '🎒', '🦉', '🦊', '🚀', '⭐', '📚', '🎨', '🌟', '🦁'];
 const DEFAULT_STUDENT_GRADE_LEVEL = SUPPORTED_GRADE_LEVEL_OPTIONS[1];
-
-interface ImageUploadFieldProps {
-  label: string;
-  value?: string;
-  alt: string;
-  onChange: (image: string | undefined) => void;
-  onUploadingChange: (isUploading: boolean) => void;
-}
-
-const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
-  label,
-  value,
-  alt,
-  onChange,
-  onUploadingChange,
-}) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-
-    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!supportedTypes.includes(file.type)) {
-      setError('Gunakan gambar JPG, PNG, WebP, atau GIF.');
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Ukuran gambar maksimal 2 MB.');
-      return;
-    }
-
-    setError('');
-    setIsUploading(true);
-    onUploadingChange(true);
-    try {
-      onChange(await uploadContentImage(file));
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Gagal mengunggah gambar.');
-    } finally {
-      setIsUploading(false);
-      onUploadingChange(false);
-    }
-  };
-
-  return (
-    <div className="space-y-2">
-      <label className="block text-[10px] text-slate-500 font-bold">{label} (opsional):</label>
-      {value && (
-        <div className="relative w-fit">
-          <img src={value} alt={alt} className="max-h-48 max-w-full rounded-xl border border-slate-200 object-contain" />
-          <button
-            type="button"
-            onClick={() => {
-              setError('');
-              onChange(undefined);
-            }}
-            className="absolute -right-2 -top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-bold text-white shadow"
-          >
-            Hapus
-          </button>
-        </div>
-      )}
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        disabled={isUploading}
-        onChange={handleFileChange}
-        className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-bold file:text-slate-700 hover:file:bg-slate-200 disabled:opacity-60"
-      />
-      <p className="text-[10px] text-slate-400">
-        {isUploading ? 'Mengunggah gambar...' : 'JPG, PNG, WebP, atau GIF; maksimal 2 MB.'}
-      </p>
-      {error && <p role="alert" className="text-[11px] font-medium text-red-600">{error}</p>}
-    </div>
-  );
-};
 
 function normalizeGradeLevel(gradeLevel: string | undefined): string {
   const normalized = gradeLevel?.toLowerCase() ?? '';
@@ -2801,33 +2722,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Isi Paragraf Bacaan (Pisahkan tiap paragraf dengan baris kosong):
-                </label>
-                <textarea
-                  rows={6}
-                  required
-                  value={(editingPassage.paragraphs || []).join('\n\n')}
-                  onChange={(e) => {
-                    const paras = e.target.value
-                      .split('\n\n')
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    const words = e.target.value.trim().split(/\s+/).length;
-                    setEditingPassage({
-                      ...editingPassage,
-                      paragraphs: paras,
-                      wordCount: words,
-                    });
-                  }}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-serif leading-relaxed text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-700"
-                  placeholder="Tuliskan isi cerita paragraf 1 di sini...&#10;&#10;Tuliskan paragraf 2 di sini..."
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Jumlah kata terdeteksi: {editingPassage.wordCount || 0} kata
-                </p>
-              </div>
+              <RichTextEditor
+                label="Teks bacaan Literasi"
+                value={includeLegacyImage(
+                  editingPassage.contentHtml || richTextFromPlainText((editingPassage.paragraphs || []).join('\n\n')),
+                  editingPassage.image,
+                )}
+                placeholder="Tuliskan bacaan. Letakkan kursor di posisi yang diinginkan, lalu sisipkan gambar."
+                minHeight={220}
+                onChange={(contentHtml, plainText) => {
+                  const paragraphs = plainText.split(/\n+/).map((paragraph) => paragraph.trim()).filter(Boolean);
+                  setEditingPassage((previous) => previous ? {
+                    ...previous,
+                    contentHtml,
+                    image: undefined,
+                    paragraphs: paragraphs.length ? paragraphs : [' '],
+                    wordCount: plainText.trim() ? plainText.trim().split(/\s+/).length : 0,
+                  } : previous);
+                }}
+                onUploadingChange={(isUploading) => setActiveImageUploads((count) =>
+                  Math.max(0, count + (isUploading ? 1 : -1)),
+                )}
+              />
+              <p className="text-[11px] text-slate-400">
+                Gunakan tombol Sisipkan gambar di toolbar untuk menaruh gambar tepat di posisi kursor.
+              </p>
 
               {/* Vocabulary / Glosarium Editor */}
               <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl space-y-3">
@@ -2945,26 +2864,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </button>
                     </div>
 
-                    <input
-                      type="text"
-                      placeholder="Tuliskan pertanyaan pemahaman AKM..."
-                      value={q.question}
-                      onChange={(e) => {
-                        const next = [...(editingPassage.questions || [])];
-                        next[qIdx].question = e.target.value;
-                        setEditingPassage({ ...editingPassage, questions: next });
-                      }}
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold"
-                    />
-
-                    <ImageUploadField
-                      label="Gambar pendukung soal literasi"
-                      value={q.image}
-                      alt={`Gambar pendukung soal ${qIdx + 1}`}
-                      onChange={(image) => setEditingPassage((previous) => {
+                    <RichTextEditor
+                      label={`Pertanyaan Literasi ${qIdx + 1}`}
+                      value={includeLegacyImage(q.questionHtml || richTextFromPlainText(q.question), q.image)}
+                      placeholder="Tuliskan pertanyaan. Sisipkan gambar tepat di posisi kursor."
+                      minHeight={80}
+                      onChange={(questionHtml, question) => setEditingPassage((previous) => {
                         if (!previous) return previous;
-                        const questions = (previous.questions || []).map((question) =>
-                          question.id === q.id ? { ...question, image } : question,
+                        const questions = (previous.questions || []).map((item) =>
+                          item.id === q.id ? { ...item, question, questionHtml, image: undefined } : item,
                         );
                         return { ...previous, questions };
                       })}
@@ -2974,6 +2882,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold">Jenis Jawaban:</label>
+                        <select
+                          value={q.type}
+                          onChange={(e) => {
+                            const type = e.target.value as LiteracyQuestion['type'];
+                            const next = [...(editingPassage.questions || [])];
+                            next[qIdx] = {
+                              ...next[qIdx],
+                              type,
+                              options: type === 'single-choice'
+                                ? next[qIdx].options?.length ? next[qIdx].options : ['Pilihan A', 'Pilihan B', 'Pilihan C', 'Pilihan D']
+                                : undefined,
+                              correctAnswers: type === 'short-answer'
+                                ? String(next[qIdx].correctAnswers || '')
+                                : type === 'single-choice'
+                                  ? next[qIdx].options?.[0] || 'Pilihan A'
+                                  : next[qIdx].correctAnswers,
+                            };
+                            setEditingPassage({ ...editingPassage, questions: next });
+                          }}
+                          className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                        >
+                          <option value="single-choice">Pilihan ganda</option>
+                          <option value="short-answer">Isian singkat</option>
+                        </select>
+                      </div>
                       <div>
                         <label className="text-[10px] text-slate-500 font-bold">Level Kognitif AKM:</label>
                         <select
@@ -2991,7 +2926,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </select>
                       </div>
 
-                      {q.options?.length ? (
+                      {q.type === 'short-answer' ? (
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-bold">Kunci Jawaban Isian:</label>
+                          <input
+                            type="text"
+                            required
+                            value={String(q.correctAnswers)}
+                            onChange={(e) => {
+                              const next = [...(editingPassage.questions || [])];
+                              next[qIdx].correctAnswers = e.target.value;
+                              setEditingPassage({ ...editingPassage, questions: next });
+                            }}
+                            className="w-full px-2 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950"
+                          />
+                        </div>
+                      ) : q.options?.length ? (
                         <div>
                           <label className="text-[10px] text-slate-500 font-bold">Pilih Kunci Jawaban:</label>
                           <select
@@ -3028,6 +2978,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       )}
                     </div>
 
+                    {q.type === 'single-choice' && (
                     <div>
                       <label className="text-[10px] text-slate-500 font-bold">Opsi Pilihan (pilih radio untuk menetapkan kunci):</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
@@ -3104,6 +3055,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         + Tambah Opsi
                       </button>
                     </div>
+                    )}
 
                     <input
                       type="text"
@@ -3306,35 +3258,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Narasi Stimulus Kontekstual:</label>
-                <textarea
-                  rows={4}
-                  required
-                  value={editingNumeracy.stimulus?.text || ''}
-                  onChange={(e) =>
-                    setEditingNumeracy({
-                      ...editingNumeracy,
-                      stimulus: {
-                        ...(editingNumeracy.stimulus || { chartType: 'table' }),
-                        text: e.target.value,
-                      },
-                    })
-                  }
-                  placeholder="Ceritakan latar situasi nyata (misal harga belanja di pasar, jadwal kereta, resep kue, dll)..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-700"
-                />
-              </div>
-
-              <ImageUploadField
-                label="Gambar pendukung stimulus numerasi"
-                value={editingNumeracy.stimulus?.image}
-                alt={`Gambar pendukung ${editingNumeracy.title || 'soal numerasi'}`}
-                onChange={(image) => setEditingNumeracy((previous) => previous ? {
+              <RichTextEditor
+                label="Teks stimulus Numerasi"
+                value={includeLegacyImage(
+                  editingNumeracy.stimulus?.textHtml || richTextFromPlainText(editingNumeracy.stimulus?.text || ''),
+                  editingNumeracy.stimulus?.image,
+                )}
+                placeholder="Tuliskan stimulus. Letakkan kursor di posisi yang diinginkan, lalu sisipkan gambar."
+                accent="indigo"
+                minHeight={140}
+                onChange={(textHtml, text) => setEditingNumeracy((previous) => previous ? {
                   ...previous,
                   stimulus: {
                     ...(previous.stimulus || { text: '' }),
-                    image,
+                    text,
+                    textHtml,
+                    image: undefined,
                   },
                 } : previous)}
                 onUploadingChange={(isUploading) => setActiveImageUploads((count) =>
@@ -3342,17 +3281,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 )}
               />
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Pertanyaan Soal:</label>
-                <input
-                  type="text"
-                  required
-                  value={editingNumeracy.question || ''}
-                  onChange={(e) => setEditingNumeracy({ ...editingNumeracy, question: e.target.value })}
-                  placeholder="Berapakah selisih biaya antara paket A dan paket B?"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-700"
-                />
-              </div>
+              <RichTextEditor
+                label="Pertanyaan Numerasi"
+                value={includeLegacyImage(
+                  editingNumeracy.questionHtml || richTextFromPlainText(editingNumeracy.question || ''),
+                  editingNumeracy.image,
+                )}
+                placeholder="Tuliskan pertanyaan. Sisipkan gambar tepat di posisi kursor."
+                accent="indigo"
+                minHeight={80}
+                onChange={(questionHtml, question) => setEditingNumeracy((previous) => previous ? {
+                  ...previous,
+                  question,
+                  questionHtml,
+                  image: undefined,
+                } : previous)}
+                onUploadingChange={(isUploading) => setActiveImageUploads((count) =>
+                  Math.max(0, count + (isUploading ? 1 : -1)),
+                )}
+              />
 
               {(editingNumeracy.type === 'single-choice' || editingNumeracy.type === 'multiple-choice') && (
                 <div>

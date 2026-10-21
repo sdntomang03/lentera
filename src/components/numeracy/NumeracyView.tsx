@@ -4,6 +4,7 @@ import { NUMERACY_QUESTIONS } from '../../data/numeracyData';
 import { NumeracyQuestion, EducationLevel, NumeracyDomain } from '../../types';
 import { soundFx } from '../../utils/audio';
 import { formatSecondsToMinutes } from '../../utils/dailyChallenge';
+import { includeLegacyImage, sanitizeRichText } from '../../utils/richText';
 
 interface NumeracyViewProps {
   onQuestionCompleted: (questionId: string, isCorrect: boolean, elapsedSeconds?: number) => void;
@@ -336,17 +337,28 @@ export const NumeracyView: React.FC<NumeracyViewProps> = ({
               </div>
 
               {/* Stimulus Narrative */}
-              <div className="p-5 bg-slate-50/80 rounded-2xl border border-slate-100 text-slate-800 leading-relaxed text-sm md:text-base">
-                {selectedQuestion.stimulus.text}
+              <div className="space-y-4 p-5 bg-slate-50/80 rounded-2xl border border-slate-100 text-slate-800 leading-relaxed text-sm md:text-base">
+                {selectedQuestion.stimulus.textHtml ? (
+                  <div
+                    className="rich-text-content"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeRichText(includeLegacyImage(
+                        selectedQuestion.stimulus.textHtml,
+                        selectedQuestion.stimulus.image,
+                      )),
+                    }}
+                  />
+                ) : (
+                  selectedQuestion.stimulus.text
+                )}
+                {!selectedQuestion.stimulus.textHtml && selectedQuestion.stimulus.image && (
+                  <img
+                    src={selectedQuestion.stimulus.image}
+                    alt={`Gambar stimulus untuk ${selectedQuestion.title}`}
+                    className="max-h-96 w-full rounded-2xl border border-slate-200 bg-white object-contain"
+                  />
+                )}
               </div>
-
-              {selectedQuestion.stimulus.image && (
-                <img
-                  src={selectedQuestion.stimulus.image}
-                  alt={`Gambar stimulus untuk ${selectedQuestion.title}`}
-                  className="max-h-96 w-full rounded-2xl border border-slate-200 bg-white object-contain"
-                />
-              )}
 
               {/* Interactive Visuals / Charts */}
               {selectedQuestion.stimulus.chartType === 'bar' && selectedQuestion.stimulus.chartData && (
@@ -446,9 +458,30 @@ export const NumeracyView: React.FC<NumeracyViewProps> = ({
                   <div className="text-xs font-bold text-indigo-700 uppercase tracking-wide mb-1">
                     Pertanyaan Asesmen
                   </div>
-                  <h3 className="text-base font-bold text-slate-900 leading-snug">
-                    {selectedQuestion.question}
-                  </h3>
+                  <div className="text-base font-bold text-slate-900 leading-snug">
+                    {selectedQuestion.questionHtml ? (
+                      <div
+                        className="rich-text-content"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeRichText(includeLegacyImage(
+                            selectedQuestion.questionHtml,
+                            selectedQuestion.image,
+                          )),
+                        }}
+                      />
+                    ) : (
+                      <>
+                        {selectedQuestion.question}
+                        {selectedQuestion.image && (
+                          <img
+                            src={selectedQuestion.image}
+                            alt={`Gambar untuk pertanyaan ${selectedQuestion.title}`}
+                            className="mt-3 max-h-72 w-full rounded-xl border border-slate-200 bg-white object-contain"
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Option / Input Interface */}
